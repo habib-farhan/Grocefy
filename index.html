@@ -1,431 +1,443 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Grocefy - Smart Grocery & Partner Sync</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Grocefy</title>
   
-  <!-- Firebase SDKs (Compat version for stable mobile execution) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <!-- Load YOUR Config File -->
+  <!-- Web App Manifest & Styling -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4F46E5">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  
+  <!-- External Config File -->
   <script src="config.js"></script>
+
   <style>
-    :root {
-      --primary: #1b4332;       /* Deep Forest Green */
-      --primary-accent: #2d6a4f;/* Emerald Green */
-      --light-green: #d8f3dc;    /* Mint Tint */
-      --mint-bg: #f4f9f5;        /* Subtle Light Mint Background */
-      --card-bg: #FFFFFF;
-      --text: #1d2d24;
-      --subtext: #52796f;
-      --border: #b7e4c7;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: var(--mint-bg); color: var(--text); padding-bottom: 90px; }
-
-    header {
-      background: linear-gradient(135deg, var(--primary), var(--primary-accent));
-      color: white;
-      padding: 16px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      box-shadow: 0 4px 12px rgba(27, 67, 50, 0.2);
-    }
-    header h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 2px; }
-    header p { font-size: 0.8rem; opacity: 0.85; font-weight: 500; }
-
-    .nav-tabs { display: flex; background: white; border-bottom: 2px solid var(--border); }
-    .tab-btn { flex: 1; padding: 14px 8px; border: none; background: none; font-weight: 700; font-size: 0.85rem; color: var(--subtext); cursor: pointer; }
-    .tab-btn.active { color: var(--primary); border-bottom: 3px solid var(--primary-accent); background: #f8fdf9; }
-
-    .view { display: none; padding: 16px; max-width: 600px; margin: 0 auto; }
-    .view.active { display: block; }
-
-    .custom-add { display: flex; gap: 8px; margin-bottom: 16px; }
-    .custom-add input { flex: 1; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.95rem; background: white; }
-    .custom-add input:focus { outline: none; border-color: var(--primary-accent); }
-    .custom-add button { background: var(--primary-accent); color: white; border: none; padding: 0 18px; border-radius: 10px; font-weight: bold; cursor: pointer; }
-
-    .category-card { background: var(--card-bg); border-radius: 12px; margin-bottom: 14px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
-    .category-header { padding: 14px 16px; background: var(--light-green); font-weight: 700; font-size: 0.95rem; color: var(--primary); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
-    .category-header .arrow { transition: transform 0.2s ease; font-size: 0.8rem; }
-    .category-card.collapsed .category-header .arrow { transform: rotate(-90deg); }
-    .category-card.collapsed .item-list { display: none; }
-
-    .item-list { display: flex; flex-direction: column; }
-    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid #eef7f1; }
-    .item-info { display: flex; flex-direction: column; }
-    .item-de { font-weight: 600; font-size: 0.95rem; color: var(--text); }
-    .item-en { font-size: 0.8rem; color: var(--subtext); }
-
-    .btn-add { background: var(--mint-bg); color: var(--primary-accent); border: 1.5px solid var(--border); padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: all 0.2s; }
-    .btn-add.added { background: #e0e0e0; color: #666666; border-color: #cccccc; }
-
-    .check-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: white; border-radius: 10px; margin-bottom: 8px; border: 1px solid var(--border); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-    .check-item.done { opacity: 0.45; text-decoration: line-through; background: #f9fbf9; }
-    .check-item input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primary-accent); }
-
-    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 -4px 12px rgba(0,0,0,0.05); }
-    .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-accent)); color: white; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 0.95rem; cursor: pointer; box-shadow: 0 2px 6px rgba(45, 106, 79, 0.3); }
-
-    .history-card { background: white; padding: 14px; border-radius: 10px; margin-bottom: 10px; border: 1px solid var(--border); }
-    .history-date { font-weight: bold; margin-bottom: 6px; color: var(--primary-accent); font-size: 0.85rem; }
+    body { -webkit-tap-highlight-color: transparent; }
+    .badge { animation: pop 0.2s ease-out; }
+    @keyframes pop { 0% { transform: scale(0.8); } 100% { transform: scale(1); } }
   </style>
 </head>
-<body>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col font-sans pb-20">
 
-  <header>
-    <h1>🌱 Grocefy</h1>
-    <p>Live Sync Grocery List</p>
+  <!-- Header -->
+  <header class="bg-indigo-600 text-white p-4 shadow-md sticky top-0 z-10 flex justify-between items-center">
+    <div class="flex items-center space-x-2">
+      <i class="fa-solid font-bold text-2xl fa-cart-shopping"></i>
+      <h1 class="text-2xl font-bold tracking-tight">Grocefy</h1>
+    </div>
+    <div id="connectionStatus" class="flex items-center space-x-1 text-xs bg-indigo-700 px-2.5 py-1 rounded-full">
+      <span class="w-2 h-2 rounded-full bg-yellow-400 inline-block animate-pulse"></span>
+      <span>Connecting...</span>
+    </div>
   </header>
 
-  <div class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab('catalog')">Catalog</button>
-    <button class="tab-btn" onclick="switchTab('shopping')">Shopping List (<span id="cart-count">0</span>)</button>
-    <button class="tab-btn" onclick="switchTab('history')">History</button>
-  </div>
+  <!-- Navigation Tabs -->
+  <nav class="bg-white border-b border-gray-200 flex text-center font-medium text-sm text-gray-500">
+    <button id="tabActive" onclick="switchTab('active')" class="flex-1 py-3 border-b-2 border-indigo-600 text-indigo-600 font-semibold flex justify-center items-center gap-1.5">
+      <i class="fa-solid fa-list-check"></i> Active List
+      <span id="activeCount" class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+    </button>
+    <button id="tabHistory" onclick="switchTab('history')" class="flex-1 py-3 border-b-2 border-transparent hover:text-gray-700 flex justify-center items-center gap-1.5">
+      <i class="fa-solid fa-clock-rotate-left"></i> History
+      <span id="historyCount" class="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+    </button>
+  </nav>
 
-  <!-- CATALOG VIEW -->
-  <div id="catalog-view" class="view active">
-    <div class="custom-add">
-      <input type="text" id="custom-input" placeholder="Add custom item...">
-      <button onclick="addCustomItem()">+ Add</button>
-    </div>
-    <div id="catalog-container"></div>
-  </div>
+  <!-- Main Container -->
+  <main class="max-w-lg w-full mx-auto p-4 flex-1">
 
-  <!-- SHOPPING LIST VIEW -->
-  <div id="shopping-view" class="view">
-    <h2 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--subtext);">Aisle Order (Store Progression)</h2>
-    <div id="active-list-container"></div>
-  </div>
+    <!-- Active List Section -->
+    <section id="sectionActive" class="space-y-4">
+      
+      <!-- Add Item Card -->
+      <form id="addItemForm" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Item Name</label>
+          <div class="relative">
+            <input type="text" id="itemName" placeholder="e.g., Rice, Milk, Apples..." required
+              class="w-full pl-3 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base">
+            <span id="detectedCategoryIcon" class="absolute right-3 top-2.5 text-xl">🛒</span>
+          </div>
+        </div>
 
-  <!-- HISTORY VIEW -->
-  <div id="history-view" class="view">
-    <div id="history-container"></div>
-  </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Quantity</label>
+            <input type="number" id="itemQty" value="1" min="0.1" step="any" required
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Unit</label>
+            <select id="itemUnit" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white">
+              <option value="pcs">Pcs</option>
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="Litre">Litre</option>
+              <option value="ml">ml</option>
+              <option value="pack">Pack</option>
+              <option value="box">Box</option>
+            </select>
+          </div>
+        </div>
 
-  <div class="bottom-bar">
-    <div>
-      <strong id="bar-count" style="color: var(--primary);">0 Items selected</strong>
-    </div>
-    <button id="main-cta" class="btn-primary" onclick="switchTab('shopping')">Go to Shopping List ➔</button>
-  </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Category</label>
+          <select id="itemCategory" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white">
+            <option value="Produce">🥦 Produce</option>
+            <option value="Dairy">🥛 Dairy & Eggs</option>
+            <option value="Bakery">🍞 Bakery</option>
+            <option value="Meat">🥩 Meat & Seafood</option>
+            <option value="Beverages">🧃 Beverages</option>
+            <option value="Frozen">🧊 Frozen Foods</option>
+            <option value="Pantry">🥫 Pantry & Snacks</option>
+            <option value="Household">🧼 Household & Care</option>
+            <option value="Other">🛒 Other</option>
+          </select>
+        </div>
+
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg shadow transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-plus"></i> Add Item
+        </button>
+      </form>
+
+      <!-- Active Grocery List -->
+      <div id="activeListContainer" class="space-y-4">
+        <!-- Dynamic Category Groups will render here -->
+      </div>
+
+      <!-- Action Bar -->
+      <div id="activeActions" class="hidden flex gap-2 pt-2">
+        <button onclick="clearCheckedItems()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 rounded-lg text-sm flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-broom"></i> Clear Checked
+        </button>
+        <button onclick="clearAllItems()" class="bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-trash"></i> Clear All
+        </button>
+      </div>
+
+    </section>
+
+    <!-- History Section -->
+    <section id="sectionHistory" class="hidden space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-lg font-bold text-gray-700">Item History</h2>
+        <button onclick="clearAllHistory()" id="btnClearHistory" class="text-xs bg-red-100 hover:bg-red-200 text-red-600 font-bold px-3 py-1.5 rounded-lg transition hidden">
+          <i class="fa-solid fa-trash-can"></i> Clear All History
+        </button>
+      </div>
+
+      <input type="text" id="historySearch" oninput="renderHistory()" placeholder="Search past items..." 
+        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+
+      <div id="historyList" class="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-100">
+        <!-- History items render here -->
+      </div>
+    </section>
+
+  </main>
 
   <script>
-    // --- REPLACE THIS WITH YOUR FIREBASE CONFIG ---
-     
+    // Initialize Database Reference
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-    let db;
-    try {
-      if (typeof firebase !== 'undefined') {
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.database();
-      }
-    } catch(e) {
-      console.warn("Firebase initialization warning.", e);
-    }
-
-    const grocefyCatalog = [
-      {
-        id: "cat_produce",
-        aisle: "1. 🥦 Produce (Obst & Gemüse)",
-        items: [
-          { de: "Äpfel", en: "Apples" }, { de: "Bananen", en: "Bananas" },
-          { de: "Tomaten", en: "Tomatoes" }, { de: "Salatgurke", en: "Cucumber" },
-          { de: "Avocado", en: "Avocado" }, { de: "Champignons", en: "Mushrooms" },
-          { de: "Zitronen", en: "Lemons" }, { de: "Limetten", en: "Limes" },
-          { de: "Orangen", en: "Oranges" }, { de: "Erdbeeren", en: "Strawberries" },
-          { de: "Heidelbeeren", en: "Blueberries" }, { de: "Weintrauben", en: "Grapes" },
-          { de: "Karotten / Möhren", en: "Carrots" }, { de: "Paprika", en: "Bell Peppers" },
-          { de: "Zucchini", en: "Zucchini" }, { de: "Brokkoli", en: "Broccoli" },
-          { de: "Blumenkohl", en: "Cauliflower" }, { de: "Spinat", en: "Spinach" },
-          { de: "Eisbergsalat", en: "Iceberg Lettuce" }, { de: "Rucola", en: "Arugula" },
-          { de: "Zwiebeln", en: "Onions" }, { de: "Knoblauch", en: "Garlic" },
-          { de: "Ingwer", en: "Ginger" }, { de: "Kartoffeln", en: "Potatoes" },
-          { de: "Süßkartoffeln", en: "Sweet Potatoes" }, { de: "Kräuter (Basilikum/Petersilie)", en: "Herbs" }
-        ]
-      },
-      {
-        id: "cat_bakery",
-        aisle: "2. 🥖 Bakery & Bread (Bäckerei & Brot)",
-        items: [
-          { de: "Vollkornbrot", en: "Whole Grain Bread" }, { de: "Toastbrot", en: "Toast Bread" },
-          { de: "Brötchen", en: "Bread Rolls" }, { de: "Laugengebäck", en: "Pretzels" },
-          { de: "Croissants", en: "Croissants" }, { de: "Pita / Fladenbrot", en: "Pita Bread" },
-          { de: "Tortilla Wraps", en: "Tortilla Wraps" }, { de: "Baguette", en: "Baguette" }
-        ]
-      },
-      {
-        id: "cat_dairy",
-        aisle: "3. 🥛 Dairy & Chilled (Kühlung & Milchprodukte)",
-        items: [
-          { de: "H-Vollmilch", en: "Whole Milk" }, { de: "Fettarme Milch", en: "Low-fat Milk" },
-          { de: "Butter", en: "Butter" }, { de: "Margarine", en: "Margarine" },
-          { de: "Naturjoghurt", en: "Plain Yogurt" }, { de: "Fruchtjoghurt", en: "Fruit Yogurt" },
-          { de: "Griechischer Joghurt", en: "Greek Yogurt" }, { de: "Quark", en: "Curd / Quark" },
-          { de: "Schmand / Saure Sahne", en: "Sour Cream" }, { de: "Schlagsahne", en: "Whipping Cream" },
-          { de: "Gouda Scheiben", en: "Sliced Gouda" }, { de: "Mozzarella", en: "Mozzarella" },
-          { de: "Feta / Hirtenkäse", en: "Feta Cheese" }, { de: "Frischkäse", en: "Cream Cheese" },
-          { de: "Eier (Freiland)", en: "Free-range Eggs" }, { de: "Tofu", en: "Tofu" }
-        ]
-      },
-      {
-        id: "cat_meat",
-        aisle: "4. 🥩 Meat & Seafood (Fleisch & Fisch)",
-        items: [
-          { de: "Hähnchenbrust", en: "Chicken Breast" }, { de: "Hackfleisch (Rind/Gemischt)", en: "Minced Meat" },
-          { de: "Rindersteak", en: "Beef Steak" }, { de: "Bacon / Frühstücksspeck", en: "Bacon" },
-          { de: "Kochschinken", en: "Cooked Ham" }, { de: "Salami", en: "Salami" },
-          { de: "Lachsfillet", en: "Salmon Filet" }, { de: "Thunfisch (Dose)", en: "Canned Tuna" }
-        ]
-      },
-      {
-        id: "cat_pantry",
-        aisle: "5. 🥫 Pantry & Canned (Vorrat & Haltbares)",
-        items: [
-          { de: "Haferflocken", en: "Rolled Oats" }, { de: "Müsli / Granola", en: "Muesli / Cereal" },
-          { de: "Spaghetti / Nudeln", en: "Pasta" }, { de: "Basmati Reis", en: "Basmati Rice" },
-          { de: "Passierte Tomaten", en: "Tomato Passata" }, { de: "Gehackte Tomaten", en: "Diced Tomatoes" },
-          { de: "Kidneybohnen", en: "Kidney Beans" }, { de: "Kichererbsen", en: "Chickpeas" },
-          { de: "Kokosmilch", en: "Coconut Milk" }, { de: "Mehl", en: "Flour" },
-          { de: "Zucker", en: "Sugar" }, { de: "Salz", en: "Salt" },
-          { de: "Olivenöl", en: "Olive Oil" }, { de: "Sonnenblumenöl", en: "Sunflower Oil" },
-          { de: "Ketchup", en: "Ketchup" }, { de: "Mayonnaise", en: "Mayonnaise" },
-          { de: "Pesto (Grün/Rot)", en: "Pesto" }, { de: "Nutella", en: "Hazelnut Spread" }
-        ]
-      },
-      {
-        id: "cat_snacks",
-        aisle: "6. 🥨 Snacks & Sweets (Knabberzeug & Süßes)",
-        items: [
-          { de: "Kartoffelchips", en: "Potato Chips" }, { de: "Erdnüsse / Nüsse", en: "Nuts" },
-          { de: "Studentenfutter", en: "Trail Mix" }, { de: "Dunkle Schokolade", en: "Dark Chocolate" },
-          { de: "Gummibärchen", en: "Gummy Bears" }, { de: "Kekse", en: "Cookies" }
-        ]
-      },
-      {
-        id: "cat_frozen",
-        aisle: "7. 🧊 Frozen Foods (Tiefkühl)",
-        items: [
-          { de: "TK Erbsen", en: "Frozen Peas" }, { de: "TK Beeren-Mix", en: "Frozen Berries" },
-          { de: "TK Pizza", en: "Frozen Pizza" }, { de: "TK Pommes", en: "French Fries" }
-        ]
-      },
-      {
-        id: "cat_drinks",
-        aisle: "8. 🧃 Drinks & Beverages (Getränke)",
-        items: [
-          { de: "Mineralwasser (Sprudel)", en: "Sparkling Water" }, { de: "Stilles Wasser", en: "Still Water" },
-          { de: "Apfelschorle", en: "Apple Spritzer" }, { de: "Orangensaft", en: "Orange Juice" },
-          { de: "Haferdrink", en: "Oat Milk" }, { de: "Kaffeebohnen", en: "Coffee Beans" },
-          { de: "Tee", en: "Tea" }, { de: "Bier", en: "Beer" }, { de: "Wein", en: "Wine" }
-        ]
-      },
-      {
-        id: "cat_household",
-        aisle: "9. 🧼 Household & Care (Haushalt & Pflege)",
-        items: [
-          { de: "Toilettenpapier", en: "Toilet Paper" }, { de: "Küchenrolle", en: "Paper Towels" },
-          { de: "Spülmittel", en: "Dish Soap" }, { de: "Spülmaschinentabs", en: "Dishwasher Tabs" },
-          { de: "Waschmittel", en: "Laundry Detergent" }, { de: "Müllbeutel", en: "Trash Bags" }
-        ]
-      }
-    ];
-
+    // App State
     let activeItems = {};
-    let historyLogs = [];
-    let collapsedState = {};
+    let historyItems = {};
 
-    if(db) {
-      db.ref('activeList').on('value', (snapshot) => {
-        activeItems = snapshot.val() || {};
-        renderAll();
-      });
-      db.ref('history').on('value', (snapshot) => {
-        const data = snapshot.val();
-        historyLogs = data ? Object.values(data) : [];
-        renderHistory();
-      });
-    }
+    // Smart Category Auto-Detection Engine
+    const categoryKeywords = {
+      Produce: ['apple', 'banana', 'orange', 'lemon', 'tomato', 'potato', 'onion', 'garlic', 'carrot', 'spinach', 'lettuce', 'cucumber', 'berry', 'fruit', 'vegetable', 'avocado', 'grape', 'mango', 'lime', 'pepper', 'ginger', 'broccoli'],
+      Dairy: ['milk', 'cheese', 'butter', 'yogurt', 'curd', 'cream', 'egg', 'paneer', 'margarine', 'cheddar', 'mozzarella'],
+      Bakery: ['bread', 'bun', 'bagel', 'croissant', 'cake', 'tortilla', 'pita', 'muffin', 'toast'],
+      Meat: ['chicken', 'beef', 'pork', 'fish', 'salmon', 'shrimp', 'turkey', 'bacon', 'sausage', 'meat', 'steak', 'tuna'],
+      Beverages: ['water', 'juice', 'soda', 'coke', 'coffee', 'tea', 'beer', 'wine', 'drink', 'pepsi', 'sparkling'],
+      Frozen: ['ice cream', 'frozen', 'pizza', 'nuggets', 'fries', 'ice'],
+      Pantry: ['rice', 'flour', 'pasta', 'noodle', 'sugar', 'salt', 'oil', 'sauce', 'ketchup', 'spice', 'snack', 'chip', 'chocolate', 'biscuit', 'cereal', 'oats', 'lentils', 'beans', 'canned', 'soup'],
+      Household: ['soap', 'shampoo', 'paper', 'tissue', 'detergent', 'cleaner', 'sponge', 'trash bag', 'toothpaste', 'brush', 'towel']
+    };
 
-    function toggleCategoryCollapse(catId) {
-      collapsedState[catId] = !collapsedState[catId];
-      const card = document.getElementById(catId);
-      if(card) {
-        card.classList.toggle('collapsed', !!collapsedState[catId]);
+    const categoryIcons = {
+      Produce: '🥦', Dairy: '🥛', Bakery: '🍞', Meat: '🥩',
+      Beverages: '🧃', Frozen: '🧊', Pantry: '🥫', Household: '🧼', Other: '🛒'
+    };
+
+    // Auto-detect category on item name typing
+    document.getElementById('itemName').addEventListener('input', (e) => {
+      const val = e.target.value.toLowerCase().trim();
+      let matchedCategory = 'Other';
+
+      if (val.length > 1) {
+        for (const [cat, keywords] of Object.entries(categoryKeywords)) {
+          if (keywords.some(keyword => val.includes(keyword))) {
+            matchedCategory = cat;
+            break;
+          }
+        }
       }
-    }
+      document.getElementById('itemCategory').value = matchedCategory;
+      document.getElementById('detectedCategoryIcon').textContent = categoryIcons[matchedCategory];
+    });
 
-    function renderCatalog() {
-      const container = document.getElementById('catalog-container');
-      container.innerHTML = '';
+    // Update icon if user manually changes category
+    document.getElementById('itemCategory').addEventListener('change', (e) => {
+      document.getElementById('detectedCategoryIcon').textContent = categoryIcons[e.target.value] || '🛒';
+    });
 
-      grocefyCatalog.forEach((cat) => {
-        const card = document.createElement('div');
-        card.id = cat.id;
-        const isCollapsed = !!collapsedState[cat.id];
-        card.className = `category-card ${isCollapsed ? 'collapsed' : ''}`;
-        
-        let itemsHTML = '';
-        cat.items.forEach(item => {
-          const isAdded = !!activeItems[item.de];
-          itemsHTML += `
-            <div class="item-row">
-              <div class="item-info">
-                <span class="item-de">${item.de}</span>
-                <span class="item-en">${item.en}</span>
-              </div>
-              <button class="btn-add ${isAdded ? 'added' : ''}" onclick="toggleItem('${item.de}', '${cat.aisle}', '${item.en}')">
-                ${isAdded ? '✓ Added' : '+ Add'}
+    // Realtime Database Connection Status
+    db.ref('.info/connected').on('value', (snap) => {
+      const statusEl = document.getElementById('connectionStatus');
+      if (snap.val() === true) {
+        statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span><span>Live</span>`;
+      } else {
+        statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-400 inline-block animate-pulse"></span><span>Connecting...</span>`;
+      }
+    });
+
+    // Realtime Listeners
+    db.ref('activeList').on('value', (snapshot) => {
+      activeItems = snapshot.val() || {};
+      renderActiveList();
+    });
+
+    db.ref('history').on('value', (snapshot) => {
+      historyItems = snapshot.val() || {};
+      renderHistory();
+    });
+
+    // Form Submission: Add Item
+    document.getElementById('addItemForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('itemName').value.trim();
+      const qty = parseFloat(document.getElementById('itemQty').value) || 1;
+      const unit = document.getElementById('itemUnit').value;
+      const category = document.getElementById('itemCategory').value;
+
+      if (!name) return;
+
+      const itemKey = name.toLowerCase().replace(/[.#$/\[\]]/g, "_");
+
+      const itemData = {
+        name: name,
+        qty: qty,
+        unit: unit,
+        category: category,
+        checked: false,
+        createdAt: Date.now()
+      };
+
+      // Add to Active List
+      db.ref('activeList/' + itemKey).set(itemData);
+
+      // Add to History automatically
+      db.ref('history/' + itemKey).set({
+        name: name,
+        category: category,
+        unit: unit,
+        lastUsed: Date.now()
+      });
+
+      // Reset Form
+      document.getElementById('itemName').value = '';
+      document.getElementById('itemQty').value = '1';
+      document.getElementById('detectedCategoryIcon').textContent = '🛒';
+      document.getElementById('itemName').focus();
+    });
+
+    // Render Active Shopping List
+    function renderActiveList() {
+      const container = document.getElementById('activeListContainer');
+      const actions = document.getElementById('activeActions');
+      const keys = Object.keys(activeItems);
+      
+      document.getElementById('activeCount').textContent = keys.length;
+
+      if (keys.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
+            <span class="text-4xl">🎉</span>
+            <p class="text-gray-500 font-medium mt-2">Your shopping list is empty!</p>
+            <p class="text-xs text-gray-400">Add items above to start shopping.</p>
+          </div>`;
+        actions.classList.add('hidden');
+        return;
+      }
+
+      actions.classList.remove('hidden');
+
+      // Group Items by Category
+      const grouped = {};
+      for (const [key, item] of Object.entries(activeItems)) {
+        const cat = item.category || 'Other';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push({ key, ...item });
+      }
+
+      let html = '';
+      for (const [category, items] of Object.entries(grouped)) {
+        const icon = categoryIcons[category] || '🛒';
+        html += `
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="bg-gray-50 px-4 py-2 border-b border-gray-100 font-bold text-xs uppercase tracking-wider text-gray-600 flex items-center justify-between">
+              <span>${icon} ${category}</span>
+              <span class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full text-[10px]">${items.length}</span>
+            </div>
+            <div class="divide-y divide-gray-100">
+        `;
+
+        items.forEach(item => {
+          const isChecked = item.checked ? 'checked' : '';
+          const lineThrough = item.checked ? 'line-through text-gray-400' : 'text-gray-800 font-medium';
+
+          html += `
+            <div class="p-3 flex items-center justify-between hover:bg-gray-50 transition">
+              <label class="flex items-center gap-3 flex-1 cursor-pointer">
+                <input type="checkbox" ${isChecked} onchange="toggleCheck('${item.key}', ${!item.checked})"
+                  class="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
+                <span class="${lineThrough} text-base">${item.name}</span>
+                <span class="text-xs font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md">
+                  ${item.qty} ${item.unit}
+                </span>
+              </label>
+              <button onclick="deleteActiveItem('${item.key}')" class="text-gray-400 hover:text-red-500 p-1.5 transition">
+                <i class="fa-solid fa-xmark text-lg"></i>
               </button>
             </div>
           `;
         });
 
-        card.innerHTML = `
-          <div class="category-header" onclick="toggleCategoryCollapse('${cat.id}')">
-            <span>${cat.aisle}</span>
-            <span class="arrow">▼</span>
-          </div>
-          <div class="item-list">${itemsHTML}</div>
-        `;
-        container.appendChild(card);
-      });
-    }
-
-    function toggleItem(name, aisle, enTranslation) {
-      if(activeItems[name]) {
-        delete activeItems[name];
-      } else {
-        activeItems[name] = { name: name, en: enTranslation || '', aisle: aisle, checked: false };
-      }
-      saveActive();
-    }
-
-    function toggleCheck(name) {
-      if(activeItems[name]) {
-        activeItems[name].checked = !activeItems[name].checked;
-        saveActive();
-      }
-    }
-
-    function addCustomItem() {
-      const input = document.getElementById('custom-input');
-      const val = input.value.trim();
-      if(val) {
-        activeItems[val] = { name: val, en: '', aisle: "5. 🥫 Pantry & Canned (Vorrat & Haltbares)", checked: false };
-        input.value = '';
-        saveActive();
-      }
-    }
-
-    function saveActive() {
-      if(db) {
-        db.ref('activeList').set(activeItems);
-      } else {
-        renderAll();
-      }
-    }
-
-    function renderShoppingList() {
-      const container = document.getElementById('active-list-container');
-      container.innerHTML = '';
-
-      const itemsArr = Object.values(activeItems);
-      if(itemsArr.length === 0) {
-        container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">Your Grocefy list is empty!</p>`;
-        return;
+        html += `</div></div>`;
       }
 
-      itemsArr.sort((a, b) => a.aisle.localeCompare(b.aisle));
-
-      itemsArr.forEach(item => {
-        const div = document.createElement('div');
-        div.className = `check-item ${item.checked ? 'done' : ''}`;
-        div.innerHTML = `
-          <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleCheck('${item.name}')">
-          <div style="flex:1;">
-            <div style="font-weight: 600;">${item.name} ${item.en ? `<span style="font-weight:normal; color:var(--subtext); font-size:0.85rem;">(${item.en})</span>` : ''}</div>
-            <div style="font-size:0.75rem; color: var(--subtext);">${item.aisle}</div>
-          </div>
-        `;
-        container.appendChild(div);
-      });
+      container.innerHTML = html;
     }
 
-    function renderAll() {
-      const count = Object.keys(activeItems).length;
-      document.getElementById('cart-count').innerText = count;
-      document.getElementById('bar-count').innerText = `${count} ${count === 1 ? 'Item' : 'Items'} selected`;
-      renderCatalog();
-      renderShoppingList();
-    }
-
-    function finishShopping() {
-      if(Object.keys(activeItems).length === 0) return;
-      
-      const newEntry = {
-        date: new Date().toLocaleString(),
-        items: Object.keys(activeItems)
-      };
-
-      if(db) {
-        db.ref('history').push(newEntry);
-        db.ref('activeList').remove();
-      } else {
-        activeItems = {};
-        renderAll();
-      }
-      switchTab('history');
-    }
-
+    // Render History Section
     function renderHistory() {
-      const container = document.getElementById('history-container');
-      container.innerHTML = '';
-      if(historyLogs.length === 0) {
-        container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">No past shopping trips logged yet.</p>`;
+      const container = document.getElementById('historyList');
+      const search = document.getElementById('historySearch').value.toLowerCase().trim();
+      const btnClear = document.getElementById('btnClearHistory');
+      
+      const keys = Object.keys(historyItems);
+      document.getElementById('historyCount').textContent = keys.length;
+
+      if (keys.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-gray-400 text-sm">No item history yet.</div>`;
+        btnClear.classList.add('hidden');
         return;
       }
-      historyLogs.slice().reverse().forEach(log => {
-        const div = document.createElement('div');
-        div.className = 'history-card';
-        div.innerHTML = `
-          <div class="history-date">📅 ${log.date}</div>
-          <div style="font-size: 0.9rem; color: var(--text);">${log.items.join(', ')}</div>
+
+      btnClear.classList.remove('hidden');
+
+      const filteredKeys = keys.filter(k => historyItems[k].name.toLowerCase().includes(search));
+
+      if (filteredKeys.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-gray-400 text-sm">No history matching "${search}"</div>`;
+        return;
+      }
+
+      let html = '';
+      filteredKeys.forEach(key => {
+        const item = historyItems[key];
+        const icon = categoryIcons[item.category] || '🛒';
+
+        html += `
+          <div class="p-3 flex items-center justify-between hover:bg-gray-50 transition">
+            <div class="flex items-center gap-2.5">
+              <span class="text-xl">${icon}</span>
+              <div>
+                <div class="font-medium text-gray-800 text-sm">${item.name}</div>
+                <div class="text-xs text-gray-400">${item.category || 'Other'}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="quickAddFromHistory('${item.name}', '${item.category || 'Other'}', '${item.unit || 'pcs'}')" 
+                class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-semibold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition">
+                <i class="fa-solid fa-plus"></i> Add
+              </button>
+              <button onclick="deleteHistoryItem('${key}')" class="text-gray-300 hover:text-red-500 p-1.5 transition">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
         `;
-        container.appendChild(div);
       });
+
+      container.innerHTML = html;
     }
 
-    function switchTab(tab) {
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-      document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-      
-      const mainBtn = document.getElementById('main-cta');
+    // Database Actions
+    function toggleCheck(key, newChecked) {
+      db.ref('activeList/' + key + '/checked').set(newChecked);
+    }
 
-      if(tab === 'catalog') {
-        document.querySelectorAll('.tab-btn')[0].classList.add('active');
-        document.getElementById('catalog-view').classList.add('active');
-        mainBtn.innerText = "Go to Shopping List ➔";
-        mainBtn.onclick = () => switchTab('shopping');
-      } else if(tab === 'shopping') {
-        document.querySelectorAll('.tab-btn')[1].classList.add('active');
-        document.getElementById('shopping-view').classList.add('active');
-        mainBtn.innerText = "Finish List ✓";
-        mainBtn.onclick = finishShopping;
-      } else {
-        document.querySelectorAll('.tab-btn')[2].classList.add('active');
-        document.getElementById('history-view').classList.add('active');
-        mainBtn.innerText = "+ New Shopping Trip";
-        mainBtn.onclick = () => switchTab('catalog');
+    function deleteActiveItem(key) {
+      db.ref('activeList/' + key).remove();
+    }
+
+    function clearCheckedItems() {
+      for (const [key, item] of Object.entries(activeItems)) {
+        if (item.checked) {
+          db.ref('activeList/' + key).remove();
+        }
       }
     }
 
-    renderAll();
+    function clearAllItems() {
+      if (confirm('Are you sure you want to clear all active items?')) {
+        db.ref('activeList').remove();
+      }
+    }
+
+    function quickAddFromHistory(name, category, unit) {
+      const key = name.toLowerCase().replace(/[.#$/\[\]]/g, "_");
+      db.ref('activeList/' + key).set({
+        name: name,
+        qty: 1,
+        unit: unit,
+        category: category,
+        checked: false,
+        createdAt: Date.now()
+      });
+      switchTab('active');
+    }
+
+    function deleteHistoryItem(key) {
+      db.ref('history/' + key).remove();
+    }
+
+    function clearAllHistory() {
+      if (confirm('Are you sure you want to delete all history?')) {
+        db.ref('history').remove();
+      }
+    }
+
+    // Tab Navigation
+    function switchTab(tab) {
+      const secActive = document.getElementById('sectionActive');
+      const secHistory = document.getElementById('sectionHistory');
+      const tabActive = document.getElementById('tabActive');
+      const tabHistory = document.getElementById('tabHistory');
+
+      if (tab === 'active') {
+        secActive.classList.remove('hidden');
+        secHistory.classList.add('hidden');
+        tabActive.className = "flex-1 py-3 border-b-2 border-indigo-600 text-indigo-600 font-semibold flex justify-center items-center gap-1.5";
+        tabHistory.className = "flex-1 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 flex justify-center items-center gap-1.5";
+      } else {
+        secActive.classList.add('hidden');
+        secHistory.classList.remove('hidden');
+        tabHistory.className = "flex-1 py-3 border-b-2 border-indigo-600 text-indigo-600 font-semibold flex justify-center items-center gap-1.5";
+        tabActive.className = "flex-1 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 flex justify-center items-center gap-1.5";
+      }
+    }
   </script>
 </body>
 </html>
