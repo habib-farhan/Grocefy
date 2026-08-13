@@ -8,7 +8,8 @@
   <!-- Firebase SDKs (Compat version for stable mobile execution) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  
+  <!-- Load YOUR Config File -->
+  <script src="config.js"></script>
   <style>
     :root {
       --primary: #1b4332;       /* Deep Forest Green */
@@ -116,15 +117,7 @@
 
   <script>
     // --- REPLACE THIS WITH YOUR FIREBASE CONFIG ---
-     const firebaseConfig = {
-  apiKey: "AIzaSyDvt6fsxNs6487Lfvs4hJe8lgblpfqrjwY",
-  authDomain: "rewe-app.firebaseapp.com",
-  databaseURL: "https://rewe-app-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "rewe-app",
-  storageBucket: "rewe-app.firebasestorage.app",
-  messagingSenderId: "522923535892",
-  appId: "1:522923535892:web:9b13813a78f666d7c48101"
-};
+     
 
     let db;
     try {
