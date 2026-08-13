@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Grocefy</title>
   
-  <!-- Web App Manifest & Styling -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#4F46E5">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -15,22 +14,20 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   
-  <!-- External Config File -->
+  <!-- Config File -->
   <script src="config.js"></script>
 
   <style>
     body { -webkit-tap-highlight-color: transparent; }
-    .badge { animation: pop 0.2s ease-out; }
-    @keyframes pop { 0% { transform: scale(0.8); } 100% { transform: scale(1); } }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col font-sans pb-20">
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col font-sans pb-12">
 
   <!-- Header -->
   <header class="bg-indigo-600 text-white p-4 shadow-md sticky top-0 z-10 flex justify-between items-center">
     <div class="flex items-center space-x-2">
-      <i class="fa-solid font-bold text-2xl fa-cart-shopping"></i>
-      <h1 class="text-2xl font-bold tracking-tight">Grocefy</h1>
+      <i class="fa-solid fa-cart-shopping text-xl"></i>
+      <h1 class="text-xl font-bold tracking-tight">Grocefy</h1>
     </div>
     <div id="connectionStatus" class="flex items-center space-x-1 text-xs bg-indigo-700 px-2.5 py-1 rounded-full">
       <span class="w-2 h-2 rounded-full bg-yellow-400 inline-block animate-pulse"></span>
@@ -38,130 +35,103 @@
     </div>
   </header>
 
-  <!-- Navigation Tabs -->
-  <nav class="bg-white border-b border-gray-200 flex text-center font-medium text-sm text-gray-500">
-    <button id="tabActive" onclick="switchTab('active')" class="flex-1 py-3 border-b-2 border-indigo-600 text-indigo-600 font-semibold flex justify-center items-center gap-1.5">
-      <i class="fa-solid fa-list-check"></i> Active List
-      <span id="activeCount" class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
-    </button>
-    <button id="tabHistory" onclick="switchTab('history')" class="flex-1 py-3 border-b-2 border-transparent hover:text-gray-700 flex justify-center items-center gap-1.5">
-      <i class="fa-solid fa-clock-rotate-left"></i> History
-      <span id="historyCount" class="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
-    </button>
-  </nav>
+  <!-- Main View -->
+  <main class="max-w-md w-full mx-auto p-4 space-y-6 flex-1">
 
-  <!-- Main Container -->
-  <main class="max-w-lg w-full mx-auto p-4 flex-1">
+    <!-- Create List Section -->
+    <section class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-3">
+      <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+        <i class="fa-solid fa-square-plus text-indigo-600"></i> Create List
+      </h2>
+      <div class="flex gap-2">
+        <input type="text" id="listTitleInput" placeholder="List Name (e.g. Weekly Market)..."
+          class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+        <button onclick="createNewList()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition">
+          Create
+        </button>
+      </div>
+    </section>
 
-    <!-- Active List Section -->
-    <section id="sectionActive" class="space-y-4">
-      
-      <!-- Add Item Card -->
-      <form id="addItemForm" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
-        <div>
-          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Item Name</label>
-          <div class="relative">
-            <input type="text" id="itemName" placeholder="e.g., Rice, Milk, Apples..." required
-              class="w-full pl-3 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base">
-            <span id="detectedCategoryIcon" class="absolute right-3 top-2.5 text-xl">🛒</span>
-          </div>
-        </div>
+    <!-- My Lists Section -->
+    <section class="space-y-3">
+      <div class="flex justify-between items-center px-1">
+        <h2 class="text-base font-bold text-gray-700 uppercase tracking-wider text-xs">My Lists</h2>
+        <span id="activeListsCount" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">0</span>
+      </div>
 
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Quantity</label>
-            <input type="number" id="itemQty" value="1" min="0.1" step="any" required
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Unit</label>
-            <select id="itemUnit" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white">
-              <option value="pcs">Pcs</option>
-              <option value="kg">kg</option>
-              <option value="g">g</option>
-              <option value="Litre">Litre</option>
-              <option value="ml">ml</option>
-              <option value="pack">Pack</option>
-              <option value="box">Box</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Category</label>
-          <select id="itemCategory" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white">
-            <option value="Produce">🥦 Produce</option>
-            <option value="Dairy">🥛 Dairy & Eggs</option>
-            <option value="Bakery">🍞 Bakery</option>
-            <option value="Meat">🥩 Meat & Seafood</option>
-            <option value="Beverages">🧃 Beverages</option>
-            <option value="Frozen">🧊 Frozen Foods</option>
-            <option value="Pantry">🥫 Pantry & Snacks</option>
-            <option value="Household">🧼 Household & Care</option>
-            <option value="Other">🛒 Other</option>
-          </select>
-        </div>
-
-        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg shadow transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-plus"></i> Add Item
+      <!-- Add Item to Active List Form -->
+      <form id="addItemForm" onsubmit="handleItemSubmit(event)" class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex gap-2">
+        <input type="text" id="itemNameInput" placeholder="Type item name (e.g. Milk, Rice)..." required
+          class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition flex items-center gap-1">
+          <i class="fa-solid fa-plus text-xs"></i> Add
         </button>
       </form>
 
-      <!-- Active Grocery List -->
-      <div id="activeListContainer" class="space-y-4">
-        <!-- Dynamic Category Groups will render here -->
-      </div>
-
-      <!-- Action Bar -->
-      <div id="activeActions" class="hidden flex gap-2 pt-2">
-        <button onclick="clearCheckedItems()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 rounded-lg text-sm flex items-center justify-center gap-1.5">
-          <i class="fa-solid fa-broom"></i> Clear Checked
-        </button>
-        <button onclick="clearAllItems()" class="bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-1.5">
-          <i class="fa-solid fa-trash"></i> Clear All
-        </button>
-      </div>
-
-    </section>
-
-    <!-- History Section -->
-    <section id="sectionHistory" class="hidden space-y-4">
-      <div class="flex justify-between items-center">
-        <h2 class="text-lg font-bold text-gray-700">Item History</h2>
-        <button onclick="clearAllHistory()" id="btnClearHistory" class="text-xs bg-red-100 hover:bg-red-200 text-red-600 font-bold px-3 py-1.5 rounded-lg transition hidden">
-          <i class="fa-solid fa-trash-can"></i> Clear All History
-        </button>
-      </div>
-
-      <input type="text" id="historySearch" oninput="renderHistory()" placeholder="Search past items..." 
-        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-
-      <div id="historyList" class="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-100">
-        <!-- History items render here -->
+      <!-- Active Lists Container -->
+      <div id="listsContainer" class="space-y-4">
+        <!-- Lists render dynamically here -->
       </div>
     </section>
 
   </main>
 
+  <!-- Quantity & Unit Picker Modal -->
+  <div id="qtyModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl space-y-4 animate-in fade-in zoom-in duration-150">
+      <div class="text-center">
+        <span id="modalCategoryIcon" class="text-3xl block mb-1">🛒</span>
+        <h3 id="modalItemTitle" class="font-bold text-lg text-gray-800 capitalize">Item Name</h3>
+        <p class="text-xs text-gray-400">Specify quantity and unit</p>
+      </div>
+
+      <!-- Quantity Adjuster -->
+      <div class="flex items-center justify-center gap-3 my-2">
+        <button type="button" onclick="adjustQty(-1)" class="w-10 h-10 rounded-full bg-gray-100 text-gray-700 font-bold text-lg hover:bg-gray-200 transition flex items-center justify-center">-</button>
+        <input type="number" id="modalQtyVal" value="1" min="0.1" step="any"
+          class="w-20 text-center text-xl font-bold border border-gray-300 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <button type="button" onclick="adjustQty(1)" class="w-10 h-10 rounded-full bg-gray-100 text-gray-700 font-bold text-lg hover:bg-gray-200 transition flex items-center justify-center">+</button>
+      </div>
+
+      <!-- Unit Selector -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 text-center">Unit</label>
+        <select id="modalUnitSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="pcs">Pcs (Pieces)</option>
+          <option value="kg">kg (Kilograms)</option>
+          <option value="g">g (Grams)</option>
+          <option value="Litre">Litre</option>
+          <option value="ml">ml (Millilitres)</option>
+          <option value="pack">Pack</option>
+          <option value="box">Box</option>
+        </select>
+      </div>
+
+      <!-- Modal Action Buttons -->
+      <div class="flex gap-2 pt-2">
+        <button type="button" onclick="closeQtyModal()" class="flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition">Cancel</button>
+        <button type="button" onclick="confirmAddItem()" class="flex-1 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition">Add to List</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // Initialize Database Reference
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // App State
-    let activeItems = {};
-    let historyItems = {};
+    let allLists = {};
+    let pendingItem = { name: '', category: 'Other', icon: '🛒' };
 
-    // Smart Category Auto-Detection Engine
+    // Keywords for background auto-categorization
     const categoryKeywords = {
-      Produce: ['apple', 'banana', 'orange', 'lemon', 'tomato', 'potato', 'onion', 'garlic', 'carrot', 'spinach', 'lettuce', 'cucumber', 'berry', 'fruit', 'vegetable', 'avocado', 'grape', 'mango', 'lime', 'pepper', 'ginger', 'broccoli'],
-      Dairy: ['milk', 'cheese', 'butter', 'yogurt', 'curd', 'cream', 'egg', 'paneer', 'margarine', 'cheddar', 'mozzarella'],
-      Bakery: ['bread', 'bun', 'bagel', 'croissant', 'cake', 'tortilla', 'pita', 'muffin', 'toast'],
-      Meat: ['chicken', 'beef', 'pork', 'fish', 'salmon', 'shrimp', 'turkey', 'bacon', 'sausage', 'meat', 'steak', 'tuna'],
-      Beverages: ['water', 'juice', 'soda', 'coke', 'coffee', 'tea', 'beer', 'wine', 'drink', 'pepsi', 'sparkling'],
-      Frozen: ['ice cream', 'frozen', 'pizza', 'nuggets', 'fries', 'ice'],
-      Pantry: ['rice', 'flour', 'pasta', 'noodle', 'sugar', 'salt', 'oil', 'sauce', 'ketchup', 'spice', 'snack', 'chip', 'chocolate', 'biscuit', 'cereal', 'oats', 'lentils', 'beans', 'canned', 'soup'],
-      Household: ['soap', 'shampoo', 'paper', 'tissue', 'detergent', 'cleaner', 'sponge', 'trash bag', 'toothpaste', 'brush', 'towel']
+      Produce: ['apple', 'banana', 'orange', 'lemon', 'tomato', 'potato', 'onion', 'garlic', 'carrot', 'spinach', 'cucumber', 'berry', 'fruit', 'vegetable', 'avocado'],
+      Dairy: ['milk', 'cheese', 'butter', 'yogurt', 'curd', 'cream', 'egg', 'paneer'],
+      Bakery: ['bread', 'bun', 'bagel', 'croissant', 'cake', 'tortilla', 'toast'],
+      Meat: ['chicken', 'beef', 'pork', 'fish', 'salmon', 'shrimp', 'meat', 'sausage'],
+      Beverages: ['water', 'juice', 'soda', 'coke', 'coffee', 'tea', 'beer', 'wine'],
+      Frozen: ['ice cream', 'frozen', 'pizza', 'fries'],
+      Pantry: ['rice', 'flour', 'pasta', 'sugar', 'salt', 'oil', 'sauce', 'snack', 'chip', 'chocolate', 'biscuit', 'cereal', 'lentils', 'beans'],
+      Household: ['soap', 'shampoo', 'paper', 'tissue', 'detergent', 'cleaner', 'toothbrush']
     };
 
     const categoryIcons = {
@@ -169,273 +139,212 @@
       Beverages: '🧃', Frozen: '🧊', Pantry: '🥫', Household: '🧼', Other: '🛒'
     };
 
-    // Auto-detect category on item name typing
-    document.getElementById('itemName').addEventListener('input', (e) => {
-      const val = e.target.value.toLowerCase().trim();
-      let matchedCategory = 'Other';
-
-      if (val.length > 1) {
-        for (const [cat, keywords] of Object.entries(categoryKeywords)) {
-          if (keywords.some(keyword => val.includes(keyword))) {
-            matchedCategory = cat;
-            break;
-          }
-        }
-      }
-      document.getElementById('itemCategory').value = matchedCategory;
-      document.getElementById('detectedCategoryIcon').textContent = categoryIcons[matchedCategory];
-    });
-
-    // Update icon if user manually changes category
-    document.getElementById('itemCategory').addEventListener('change', (e) => {
-      document.getElementById('detectedCategoryIcon').textContent = categoryIcons[e.target.value] || '🛒';
-    });
-
-    // Realtime Database Connection Status
+    // Connection Status Listener
     db.ref('.info/connected').on('value', (snap) => {
       const statusEl = document.getElementById('connectionStatus');
-      if (snap.val() === true) {
-        statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span><span>Live</span>`;
-      } else {
-        statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-400 inline-block animate-pulse"></span><span>Connecting...</span>`;
+      statusEl.innerHTML = snap.val() === true 
+        ? `<span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span><span>Live</span>`
+        : `<span class="w-2 h-2 rounded-full bg-yellow-400 inline-block animate-pulse"></span><span>Connecting...</span>`;
+    });
+
+    // Realtime Lists Listener
+    db.ref('lists').on('value', (snapshot) => {
+      allLists = snapshot.val() || {};
+      renderLists();
+    });
+
+    // Create a New List (Defaults to New List 1, New List 2, etc.)
+    function createNewList() {
+      const titleInput = document.getElementById('listTitleInput');
+      let title = titleInput.value.trim();
+
+      if (!title) {
+        const count = Object.keys(allLists).length + 1;
+        title = `New List ${count}`;
       }
-    });
 
-    // Realtime Listeners
-    db.ref('activeList').on('value', (snapshot) => {
-      activeItems = snapshot.val() || {};
-      renderActiveList();
-    });
+      const newListRef = db.ref('lists').push();
+      newListRef.set({
+        title: title,
+        createdAt: Date.now(),
+        items: {}
+      });
 
-    db.ref('history').on('value', (snapshot) => {
-      historyItems = snapshot.val() || {};
-      renderHistory();
-    });
+      titleInput.value = '';
+    }
 
-    // Form Submission: Add Item
-    document.getElementById('addItemForm').addEventListener('submit', (e) => {
+    // Handle initial item typing submit -> Opens Modal
+    function handleItemSubmit(e) {
       e.preventDefault();
-      const name = document.getElementById('itemName').value.trim();
-      const qty = parseFloat(document.getElementById('itemQty').value) || 1;
-      const unit = document.getElementById('itemUnit').value;
-      const category = document.getElementById('itemCategory').value;
+      const input = document.getElementById('itemNameInput');
+      const val = input.value.trim();
+      if (!val) return;
 
-      if (!name) return;
+      let detectedCat = 'Other';
+      const lower = val.toLowerCase();
 
-      const itemKey = name.toLowerCase().replace(/[.#$/\[\]]/g, "_");
+      for (const [cat, keywords] of Object.entries(categoryKeywords)) {
+        if (keywords.some(k => lower.includes(k))) {
+          detectedCat = cat;
+          break;
+        }
+      }
 
-      const itemData = {
-        name: name,
-        qty: qty,
-        unit: unit,
-        category: category,
-        checked: false,
-        createdAt: Date.now()
+      pendingItem = {
+        name: val,
+        category: detectedCat,
+        icon: categoryIcons[detectedCat] || '🛒'
       };
 
-      // Add to Active List
-      db.ref('activeList/' + itemKey).set(itemData);
+      document.getElementById('modalItemTitle').textContent = val;
+      document.getElementById('modalCategoryIcon').textContent = pendingItem.icon;
+      document.getElementById('modalQtyVal').value = 1;
+      document.getElementById('modalUnitSelect').value = 'pcs';
+      document.getElementById('qtyModal').classList.remove('hidden');
+    }
 
-      // Add to History automatically
-      db.ref('history/' + itemKey).set({
-        name: name,
-        category: category,
+    function adjustQty(delta) {
+      const input = document.getElementById('modalQtyVal');
+      let current = parseFloat(input.value) || 1;
+      current = Math.max(0.1, current + delta);
+      input.value = current;
+    }
+
+    function closeQtyModal() {
+      document.getElementById('qtyModal').classList.add('hidden');
+    }
+
+    // Confirm Modal -> Adds item to active list
+    function confirmAddItem() {
+      const listKeys = Object.keys(allLists);
+      
+      // If no list exists yet, create default list automatically
+      if (listKeys.length === 0) {
+        const newListRef = db.ref('lists').push();
+        const listId = newListRef.key;
+        newListRef.set({
+          title: "New List 1",
+          createdAt: Date.now()
+        });
+        saveItemToList(listId);
+      } else {
+        // Add to the most recently created list
+        const latestListId = listKeys[listKeys.length - 1];
+        saveItemToList(latestListId);
+      }
+
+      closeQtyModal();
+      document.getElementById('itemNameInput').value = '';
+    }
+
+    function saveItemToList(listId) {
+      const qty = parseFloat(document.getElementById('modalQtyVal').value) || 1;
+      const unit = document.getElementById('modalUnitSelect').value;
+      const itemKey = pendingItem.name.toLowerCase().replace(/[.#$/\[\]]/g, "_");
+
+      db.ref(`lists/${listId}/items/${itemKey}`).set({
+        name: pendingItem.name,
+        qty: qty,
+        unit: unit,
+        category: pendingItem.category,
+        icon: pendingItem.icon,
+        checked: false,
+        createdAt: Date.now()
+      });
+
+      // Save to history automatically
+      db.ref(`history/${itemKey}`).set({
+        name: pendingItem.name,
+        category: pendingItem.category,
         unit: unit,
         lastUsed: Date.now()
       });
-
-      // Reset Form
-      document.getElementById('itemName').value = '';
-      document.getElementById('itemQty').value = '1';
-      document.getElementById('detectedCategoryIcon').textContent = '🛒';
-      document.getElementById('itemName').focus();
-    });
-
-    // Render Active Shopping List
-    function renderActiveList() {
-      const container = document.getElementById('activeListContainer');
-      const actions = document.getElementById('activeActions');
-      const keys = Object.keys(activeItems);
-      
-      document.getElementById('activeCount').textContent = keys.length;
-
-      if (keys.length === 0) {
-        container.innerHTML = `
-          <div class="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-            <span class="text-4xl">🎉</span>
-            <p class="text-gray-500 font-medium mt-2">Your shopping list is empty!</p>
-            <p class="text-xs text-gray-400">Add items above to start shopping.</p>
-          </div>`;
-        actions.classList.add('hidden');
-        return;
-      }
-
-      actions.classList.remove('hidden');
-
-      // Group Items by Category
-      const grouped = {};
-      for (const [key, item] of Object.entries(activeItems)) {
-        const cat = item.category || 'Other';
-        if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push({ key, ...item });
-      }
-
-      let html = '';
-      for (const [category, items] of Object.entries(grouped)) {
-        const icon = categoryIcons[category] || '🛒';
-        html += `
-          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="bg-gray-50 px-4 py-2 border-b border-gray-100 font-bold text-xs uppercase tracking-wider text-gray-600 flex items-center justify-between">
-              <span>${icon} ${category}</span>
-              <span class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full text-[10px]">${items.length}</span>
-            </div>
-            <div class="divide-y divide-gray-100">
-        `;
-
-        items.forEach(item => {
-          const isChecked = item.checked ? 'checked' : '';
-          const lineThrough = item.checked ? 'line-through text-gray-400' : 'text-gray-800 font-medium';
-
-          html += `
-            <div class="p-3 flex items-center justify-between hover:bg-gray-50 transition">
-              <label class="flex items-center gap-3 flex-1 cursor-pointer">
-                <input type="checkbox" ${isChecked} onchange="toggleCheck('${item.key}', ${!item.checked})"
-                  class="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
-                <span class="${lineThrough} text-base">${item.name}</span>
-                <span class="text-xs font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md">
-                  ${item.qty} ${item.unit}
-                </span>
-              </label>
-              <button onclick="deleteActiveItem('${item.key}')" class="text-gray-400 hover:text-red-500 p-1.5 transition">
-                <i class="fa-solid fa-xmark text-lg"></i>
-              </button>
-            </div>
-          `;
-        });
-
-        html += `</div></div>`;
-      }
-
-      container.innerHTML = html;
     }
 
-    // Render History Section
-    function renderHistory() {
-      const container = document.getElementById('historyList');
-      const search = document.getElementById('historySearch').value.toLowerCase().trim();
-      const btnClear = document.getElementById('btnClearHistory');
-      
-      const keys = Object.keys(historyItems);
-      document.getElementById('historyCount').textContent = keys.length;
+    // Render Lists
+    function renderLists() {
+      const container = document.getElementById('listsContainer');
+      const listKeys = Object.keys(allLists);
+      document.getElementById('activeListsCount').textContent = listKeys.length;
 
-      if (keys.length === 0) {
-        container.innerHTML = `<div class="p-6 text-center text-gray-400 text-sm">No item history yet.</div>`;
-        btnClear.classList.add('hidden');
-        return;
-      }
-
-      btnClear.classList.remove('hidden');
-
-      const filteredKeys = keys.filter(k => historyItems[k].name.toLowerCase().includes(search));
-
-      if (filteredKeys.length === 0) {
-        container.innerHTML = `<div class="p-6 text-center text-gray-400 text-sm">No history matching "${search}"</div>`;
+      if (listKeys.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-10 bg-white rounded-xl border border-dashed border-gray-300">
+            <span class="text-3xl">📝</span>
+            <p class="text-gray-500 font-medium mt-2 text-sm">No shopping lists yet.</p>
+            <p class="text-xs text-gray-400">Type an item name above or create a list title to begin.</p>
+          </div>`;
         return;
       }
 
       let html = '';
-      filteredKeys.forEach(key => {
-        const item = historyItems[key];
-        const icon = categoryIcons[item.category] || '🛒';
+      listKeys.forEach(listId => {
+        const list = allLists[listId];
+        const items = list.items || {};
+        const itemKeys = Object.keys(items);
 
         html += `
-          <div class="p-3 flex items-center justify-between hover:bg-gray-50 transition">
-            <div class="flex items-center gap-2.5">
-              <span class="text-xl">${icon}</span>
-              <div>
-                <div class="font-medium text-gray-800 text-sm">${item.name}</div>
-                <div class="text-xs text-gray-400">${item.category || 'Other'}</div>
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <!-- List Header -->
+            <div class="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex justify-between items-center">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-list-ul text-indigo-600 text-xs"></i>
+                <h3 class="font-bold text-gray-800 text-sm">${list.title}</h3>
+                <span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-semibold">${itemKeys.length}</span>
               </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <button onclick="quickAddFromHistory('${item.name}', '${item.category || 'Other'}', '${item.unit || 'pcs'}')" 
-                class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-semibold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition">
-                <i class="fa-solid fa-plus"></i> Add
-              </button>
-              <button onclick="deleteHistoryItem('${key}')" class="text-gray-300 hover:text-red-500 p-1.5 transition">
+              <button onclick="deleteList('${listId}')" class="text-gray-400 hover:text-red-500 text-xs transition p-1">
                 <i class="fa-solid fa-trash-can"></i>
               </button>
             </div>
-          </div>
+
+            <!-- List Items -->
+            <div class="divide-y divide-gray-100">
         `;
+
+        if (itemKeys.length === 0) {
+          html += `<div class="p-3 text-center text-xs text-gray-400">No items added to this list yet.</div>`;
+        } else {
+          itemKeys.forEach(itemKey => {
+            const item = items[itemKey];
+            const isChecked = item.checked ? 'checked' : '';
+            const lineThrough = item.checked ? 'line-through text-gray-400' : 'text-gray-800 font-medium';
+
+            html += `
+              <div class="p-3 flex items-center justify-between hover:bg-gray-50 transition">
+                <label class="flex items-center gap-3 flex-1 cursor-pointer">
+                  <input type="checkbox" ${isChecked} onchange="toggleItemCheck('${listId}', '${itemKey}', ${!item.checked})"
+                    class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
+                  <span class="text-base">${item.icon || '🛒'}</span>
+                  <span class="${lineThrough} text-sm">${item.name}</span>
+                  <span class="text-xs font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md">
+                    ${item.qty} ${item.unit}
+                  </span>
+                </label>
+                <button onclick="deleteItem('${listId}', '${itemKey}')" class="text-gray-300 hover:text-red-500 p-1 transition">
+                  <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+              </div>
+            `;
+          });
+        }
+
+        html += `</div></div>`;
       });
 
       container.innerHTML = html;
     }
 
-    // Database Actions
-    function toggleCheck(key, newChecked) {
-      db.ref('activeList/' + key + '/checked').set(newChecked);
+    function toggleItemCheck(listId, itemKey, newChecked) {
+      db.ref(`lists/${listId}/items/${itemKey}/checked`).set(newChecked);
     }
 
-    function deleteActiveItem(key) {
-      db.ref('activeList/' + key).remove();
+    function deleteItem(listId, itemKey) {
+      db.ref(`lists/${listId}/items/${itemKey}`).remove();
     }
 
-    function clearCheckedItems() {
-      for (const [key, item] of Object.entries(activeItems)) {
-        if (item.checked) {
-          db.ref('activeList/' + key).remove();
-        }
-      }
-    }
-
-    function clearAllItems() {
-      if (confirm('Are you sure you want to clear all active items?')) {
-        db.ref('activeList').remove();
-      }
-    }
-
-    function quickAddFromHistory(name, category, unit) {
-      const key = name.toLowerCase().replace(/[.#$/\[\]]/g, "_");
-      db.ref('activeList/' + key).set({
-        name: name,
-        qty: 1,
-        unit: unit,
-        category: category,
-        checked: false,
-        createdAt: Date.now()
-      });
-      switchTab('active');
-    }
-
-    function deleteHistoryItem(key) {
-      db.ref('history/' + key).remove();
-    }
-
-    function clearAllHistory() {
-      if (confirm('Are you sure you want to delete all history?')) {
-        db.ref('history').remove();
-      }
-    }
-
-    // Tab Navigation
-    function switchTab(tab) {
-      const secActive = document.getElementById('sectionActive');
-      const secHistory = document.getElementById('sectionHistory');
-      const tabActive = document.getElementById('tabActive');
-      const tabHistory = document.getElementById('tabHistory');
-
-      if (tab === 'active') {
-        secActive.classList.remove('hidden');
-        secHistory.classList.add('hidden');
-        tabActive.className = "flex-1 py-3 border-b-2 border-indigo-600 text-indigo-600 font-semibold flex justify-center items-center gap-1.5";
-        tabHistory.className = "flex-1 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 flex justify-center items-center gap-1.5";
-      } else {
-        secActive.classList.add('hidden');
-        secHistory.classList.remove('hidden');
-        tabHistory.className = "flex-1 py-3 border-b-2 border-indigo-600 text-indigo-600 font-semibold flex justify-center items-center gap-1.5";
-        tabActive.className = "flex-1 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 flex justify-center items-center gap-1.5";
+    function deleteList(listId) {
+      if (confirm('Are you sure you want to delete this list?')) {
+        db.ref(`lists/${listId}`).remove();
       }
     }
   </script>
