@@ -2,351 +2,428 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Grocefy</title>
-  
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#4F46E5">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grocefy - Smart Grocery & Partner Sync</title>
   <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-  
-  <!-- Config File -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="config.js"></script>
-
   <style>
-    body { -webkit-tap-highlight-color: transparent; }
+    :root {
+      --primary: #1b4332;       /* Deep Forest Green */
+      --primary-accent: #2d6a4f;/* Emerald Green */
+      --light-green: #d8f3dc;    /* Mint Tint */
+      --mint-bg: #f4f9f5;        /* Subtle Light Mint Background */
+      --card-bg: #FFFFFF;
+      --text: #1d2d24;
+      --subtext: #52796f;
+      --border: #b7e4c7;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--mint-bg); color: var(--text); padding-bottom: 90px; }
+
+    header {
+      background: linear-gradient(135deg, var(--primary), var(--primary-accent));
+      color: white;
+      padding: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(27, 67, 50, 0.2);
+    }
+    header h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 2px; }
+    header p { font-size: 0.8rem; opacity: 0.85; font-weight: 500; }
+
+    .nav-tabs { display: flex; background: white; border-bottom: 2px solid var(--border); }
+    .tab-btn { flex: 1; padding: 14px 8px; border: none; background: none; font-weight: 700; font-size: 0.85rem; color: var(--subtext); cursor: pointer; }
+    .tab-btn.active { color: var(--primary); border-bottom: 3px solid var(--primary-accent); background: #f8fdf9; }
+
+    .view { display: none; padding: 16px; max-width: 600px; margin: 0 auto; }
+    .view.active { display: block; }
+
+    .custom-add { display: flex; gap: 8px; margin-bottom: 16px; }
+    .custom-add input { flex: 1; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.95rem; background: white; }
+    .custom-add input:focus { outline: none; border-color: var(--primary-accent); }
+    .custom-add button { background: var(--primary-accent); color: white; border: none; padding: 0 18px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+
+    .category-card { background: var(--card-bg); border-radius: 12px; margin-bottom: 14px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
+    .category-header { padding: 14px 16px; background: var(--light-green); font-weight: 700; font-size: 0.95rem; color: var(--primary); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+    .category-header .arrow { transition: transform 0.2s ease; font-size: 0.8rem; }
+    .category-card.collapsed .category-header .arrow { transform: rotate(-90deg); }
+    .category-card.collapsed .item-list { display: none; }
+
+    .item-list { display: flex; flex-direction: column; }
+    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid #eef7f1; }
+    .item-info { display: flex; flex-direction: column; }
+    .item-de { font-weight: 600; font-size: 0.95rem; color: var(--text); }
+    .item-en { font-size: 0.8rem; color: var(--subtext); }
+
+    .btn-add { background: var(--mint-bg); color: var(--primary-accent); border: 1.5px solid var(--border); padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: all 0.2s; }
+    .btn-add.added { background: #e0e0e0; color: #666666; border-color: #cccccc; }
+
+    .check-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: white; border-radius: 10px; margin-bottom: 8px; border: 1px solid var(--border); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .check-item.done { opacity: 0.45; text-decoration: line-through; background: #f9fbf9; }
+    .check-item input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primary-accent); }
+
+    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 -4px 12px rgba(0,0,0,0.05); }
+    .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-accent)); color: white; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 0.95rem; cursor: pointer; box-shadow: 0 2px 6px rgba(45, 106, 79, 0.3); }
+
+    .history-card { background: white; padding: 14px; border-radius: 10px; margin-bottom: 10px; border: 1px solid var(--border); }
+    .history-date { font-weight: bold; margin-bottom: 6px; color: var(--primary-accent); font-size: 0.85rem; }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col font-sans pb-12">
+<body>
 
-  <!-- Header -->
-  <header class="bg-indigo-600 text-white p-4 shadow-md sticky top-0 z-10 flex justify-between items-center">
-    <div class="flex items-center space-x-2">
-      <i class="fa-solid fa-cart-shopping text-xl"></i>
-      <h1 class="text-xl font-bold tracking-tight">Grocefy</h1>
-    </div>
-    <div id="connectionStatus" class="flex items-center space-x-1 text-xs bg-indigo-700 px-2.5 py-1 rounded-full">
-      <span class="w-2 h-2 rounded-full bg-yellow-400 inline-block animate-pulse"></span>
-      <span>Connecting...</span>
-    </div>
+  <header>
+    <h1>🌱 Grocefy</h1>
+    <p>Live Sync Grocery List</p>
   </header>
 
-  <!-- Main View -->
-  <main class="max-w-md w-full mx-auto p-4 space-y-6 flex-1">
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('catalog')">Catalog</button>
+    <button class="tab-btn" onclick="switchTab('shopping')">Shopping List (<span id="cart-count">0</span>)</button>
+    <button class="tab-btn" onclick="switchTab('history')">History</button>
+  </div>
 
-    <!-- Create List Section -->
-    <section class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-3">
-      <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-        <i class="fa-solid fa-square-plus text-indigo-600"></i> Create List
-      </h2>
-      <div class="flex gap-2">
-        <input type="text" id="listTitleInput" placeholder="List Name (e.g. Weekly Market)..."
-          class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-        <button onclick="createNewList()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition">
-          Create
-        </button>
-      </div>
-    </section>
-
-    <!-- My Lists Section -->
-    <section class="space-y-3">
-      <div class="flex justify-between items-center px-1">
-        <h2 class="text-base font-bold text-gray-700 uppercase tracking-wider text-xs">My Lists</h2>
-        <span id="activeListsCount" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">0</span>
-      </div>
-
-      <!-- Add Item to Active List Form -->
-      <form id="addItemForm" onsubmit="handleItemSubmit(event)" class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex gap-2">
-        <input type="text" id="itemNameInput" placeholder="Type item name (e.g. Milk, Rice)..." required
-          class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition flex items-center gap-1">
-          <i class="fa-solid fa-plus text-xs"></i> Add
-        </button>
-      </form>
-
-      <!-- Active Lists Container -->
-      <div id="listsContainer" class="space-y-4">
-        <!-- Lists render dynamically here -->
-      </div>
-    </section>
-
-  </main>
-
-  <!-- Quantity & Unit Picker Modal -->
-  <div id="qtyModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl space-y-4 animate-in fade-in zoom-in duration-150">
-      <div class="text-center">
-        <span id="modalCategoryIcon" class="text-3xl block mb-1">🛒</span>
-        <h3 id="modalItemTitle" class="font-bold text-lg text-gray-800 capitalize">Item Name</h3>
-        <p class="text-xs text-gray-400">Specify quantity and unit</p>
-      </div>
-
-      <!-- Quantity Adjuster -->
-      <div class="flex items-center justify-center gap-3 my-2">
-        <button type="button" onclick="adjustQty(-1)" class="w-10 h-10 rounded-full bg-gray-100 text-gray-700 font-bold text-lg hover:bg-gray-200 transition flex items-center justify-center">-</button>
-        <input type="number" id="modalQtyVal" value="1" min="0.1" step="any"
-          class="w-20 text-center text-xl font-bold border border-gray-300 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-        <button type="button" onclick="adjustQty(1)" class="w-10 h-10 rounded-full bg-gray-100 text-gray-700 font-bold text-lg hover:bg-gray-200 transition flex items-center justify-center">+</button>
-      </div>
-
-      <!-- Unit Selector -->
-      <div>
-        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 text-center">Unit</label>
-        <select id="modalUnitSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <option value="pcs">Pcs (Pieces)</option>
-          <option value="kg">kg (Kilograms)</option>
-          <option value="g">g (Grams)</option>
-          <option value="Litre">Litre</option>
-          <option value="ml">ml (Millilitres)</option>
-          <option value="pack">Pack</option>
-          <option value="box">Box</option>
-        </select>
-      </div>
-
-      <!-- Modal Action Buttons -->
-      <div class="flex gap-2 pt-2">
-        <button type="button" onclick="closeQtyModal()" class="flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition">Cancel</button>
-        <button type="button" onclick="confirmAddItem()" class="flex-1 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition">Add to List</button>
-      </div>
+  <!-- CATALOG VIEW -->
+  <div id="catalog-view" class="view active">
+    <div class="custom-add">
+      <input type="text" id="custom-input" placeholder="Add custom item...">
+      <button onclick="addCustomItem()">+ Add</button>
     </div>
+    <div id="catalog-container"></div>
+  </div>
+
+  <!-- SHOPPING LIST VIEW -->
+  <div id="shopping-view" class="view">
+    <h2 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--subtext);">Aisle Order (Store Progression)</h2>
+    <div id="active-list-container"></div>
+  </div>
+
+  <!-- HISTORY VIEW -->
+  <div id="history-view" class="view">
+    <div id="history-container"></div>
+  </div>
+
+  <div class="bottom-bar">
+    <div>
+      <strong id="bar-count" style="color: var(--primary);">0 Items selected</strong>
+    </div>
+    <button id="main-cta" class="btn-primary" onclick="switchTab('shopping')">Go to Shopping List ➔</button>
   </div>
 
   <script>
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    // --- REPLACE THIS WITH YOUR FIREBASE CONFIG ---
+   
 
-    let allLists = {};
-    let pendingItem = { name: '', category: 'Other', icon: '🛒' };
-
-    // Keywords for background auto-categorization
-    const categoryKeywords = {
-      Produce: ['apple', 'banana', 'orange', 'lemon', 'tomato', 'potato', 'onion', 'garlic', 'carrot', 'spinach', 'cucumber', 'berry', 'fruit', 'vegetable', 'avocado'],
-      Dairy: ['milk', 'cheese', 'butter', 'yogurt', 'curd', 'cream', 'egg', 'paneer'],
-      Bakery: ['bread', 'bun', 'bagel', 'croissant', 'cake', 'tortilla', 'toast'],
-      Meat: ['chicken', 'beef', 'pork', 'fish', 'salmon', 'shrimp', 'meat', 'sausage'],
-      Beverages: ['water', 'juice', 'soda', 'coke', 'coffee', 'tea', 'beer', 'wine'],
-      Frozen: ['ice cream', 'frozen', 'pizza', 'fries'],
-      Pantry: ['rice', 'flour', 'pasta', 'sugar', 'salt', 'oil', 'sauce', 'snack', 'chip', 'chocolate', 'biscuit', 'cereal', 'lentils', 'beans'],
-      Household: ['soap', 'shampoo', 'paper', 'tissue', 'detergent', 'cleaner', 'toothbrush']
-    };
-
-    const categoryIcons = {
-      Produce: '🥦', Dairy: '🥛', Bakery: '🍞', Meat: '🥩',
-      Beverages: '🧃', Frozen: '🧊', Pantry: '🥫', Household: '🧼', Other: '🛒'
-    };
-
-    // Connection Status Listener
-    db.ref('.info/connected').on('value', (snap) => {
-      const statusEl = document.getElementById('connectionStatus');
-      statusEl.innerHTML = snap.val() === true 
-        ? `<span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span><span>Live</span>`
-        : `<span class="w-2 h-2 rounded-full bg-yellow-400 inline-block animate-pulse"></span><span>Connecting...</span>`;
-    });
-
-    // Realtime Lists Listener
-    db.ref('lists').on('value', (snapshot) => {
-      allLists = snapshot.val() || {};
-      renderLists();
-    });
-
-    // Create a New List (Defaults to New List 1, New List 2, etc.)
-    function createNewList() {
-      const titleInput = document.getElementById('listTitleInput');
-      let title = titleInput.value.trim();
-
-      if (!title) {
-        const count = Object.keys(allLists).length + 1;
-        title = `New List ${count}`;
+    let db;
+    try {
+      if (typeof firebase !== 'undefined') {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
       }
+    } catch(e) {
+      console.warn("Firebase initialization warning.", e);
+    }
 
-      const newListRef = db.ref('lists').push();
-      newListRef.set({
-        title: title,
-        createdAt: Date.now(),
-        items: {}
+    const grocefyCatalog = [
+      {
+        id: "cat_produce",
+        aisle: "1. 🥦 Produce (Obst & Gemüse)",
+        items: [
+          { de: "Äpfel", en: "Apples" }, { de: "Bananen", en: "Bananas" },
+          { de: "Tomaten", en: "Tomatoes" }, { de: "Salatgurke", en: "Cucumber" },
+          { de: "Avocado", en: "Avocado" }, { de: "Champignons", en: "Mushrooms" },
+          { de: "Zitronen", en: "Lemons" }, { de: "Limetten", en: "Limes" },
+          { de: "Orangen", en: "Oranges" }, { de: "Erdbeeren", en: "Strawberries" },
+          { de: "Heidelbeeren", en: "Blueberries" }, { de: "Weintrauben", en: "Grapes" },
+          { de: "Karotten / Möhren", en: "Carrots" }, { de: "Paprika", en: "Bell Peppers" },
+          { de: "Zucchini", en: "Zucchini" }, { de: "Brokkoli", en: "Broccoli" },
+          { de: "Blumenkohl", en: "Cauliflower" }, { de: "Spinat", en: "Spinach" },
+          { de: "Eisbergsalat", en: "Iceberg Lettuce" }, { de: "Rucola", en: "Arugula" },
+          { de: "Zwiebeln", en: "Onions" }, { de: "Knoblauch", en: "Garlic" },
+          { de: "Ingwer", en: "Ginger" }, { de: "Kartoffeln", en: "Potatoes" },
+          { de: "Süßkartoffeln", en: "Sweet Potatoes" }, { de: "Kräuter (Basilikum/Petersilie)", en: "Herbs" }
+        ]
+      },
+      {
+        id: "cat_bakery",
+        aisle: "2. 🥖 Bakery & Bread (Bäckerei & Brot)",
+        items: [
+          { de: "Vollkornbrot", en: "Whole Grain Bread" }, { de: "Toastbrot", en: "Toast Bread" },
+          { de: "Brötchen", en: "Bread Rolls" }, { de: "Laugengebäck", en: "Pretzels" },
+          { de: "Croissants", en: "Croissants" }, { de: "Pita / Fladenbrot", en: "Pita Bread" },
+          { de: "Tortilla Wraps", en: "Tortilla Wraps" }, { de: "Baguette", en: "Baguette" }
+        ]
+      },
+      {
+        id: "cat_dairy",
+        aisle: "3. 🥛 Dairy & Chilled (Kühlung & Milchprodukte)",
+        items: [
+          { de: "H-Vollmilch", en: "Whole Milk" }, { de: "Fettarme Milch", en: "Low-fat Milk" },
+          { de: "Butter", en: "Butter" }, { de: "Margarine", en: "Margarine" },
+          { de: "Naturjoghurt", en: "Plain Yogurt" }, { de: "Fruchtjoghurt", en: "Fruit Yogurt" },
+          { de: "Griechischer Joghurt", en: "Greek Yogurt" }, { de: "Quark", en: "Curd / Quark" },
+          { de: "Schmand / Saure Sahne", en: "Sour Cream" }, { de: "Schlagsahne", en: "Whipping Cream" },
+          { de: "Gouda Scheiben", en: "Sliced Gouda" }, { de: "Mozzarella", en: "Mozzarella" },
+          { de: "Feta / Hirtenkäse", en: "Feta Cheese" }, { de: "Frischkäse", en: "Cream Cheese" },
+          { de: "Eier (Freiland)", en: "Free-range Eggs" }, { de: "Tofu", en: "Tofu" }
+        ]
+      },
+      {
+        id: "cat_meat",
+        aisle: "4. 🥩 Meat & Seafood (Fleisch & Fisch)",
+        items: [
+          { de: "Hähnchenbrust", en: "Chicken Breast" }, { de: "Hackfleisch (Rind/Gemischt)", en: "Minced Meat" },
+          { de: "Rindersteak", en: "Beef Steak" }, { de: "Bacon / Frühstücksspeck", en: "Bacon" },
+          { de: "Kochschinken", en: "Cooked Ham" }, { de: "Salami", en: "Salami" },
+          { de: "Lachsfillet", en: "Salmon Filet" }, { de: "Thunfisch (Dose)", en: "Canned Tuna" }
+        ]
+      },
+      {
+        id: "cat_pantry",
+        aisle: "5. 🥫 Pantry & Canned (Vorrat & Haltbares)",
+        items: [
+          { de: "Haferflocken", en: "Rolled Oats" }, { de: "Müsli / Granola", en: "Muesli / Cereal" },
+          { de: "Spaghetti / Nudeln", en: "Pasta" }, { de: "Basmati Reis", en: "Basmati Rice" },
+          { de: "Passierte Tomaten", en: "Tomato Passata" }, { de: "Gehackte Tomaten", en: "Diced Tomatoes" },
+          { de: "Kidneybohnen", en: "Kidney Beans" }, { de: "Kichererbsen", en: "Chickpeas" },
+          { de: "Kokosmilch", en: "Coconut Milk" }, { de: "Mehl", en: "Flour" },
+          { de: "Zucker", en: "Sugar" }, { de: "Salz", en: "Salt" },
+          { de: "Olivenöl", en: "Olive Oil" }, { de: "Sonnenblumenöl", en: "Sunflower Oil" },
+          { de: "Ketchup", en: "Ketchup" }, { de: "Mayonnaise", en: "Mayonnaise" },
+          { de: "Pesto (Grün/Rot)", en: "Pesto" }, { de: "Nutella", en: "Hazelnut Spread" }
+        ]
+      },
+      {
+        id: "cat_snacks",
+        aisle: "6. 🥨 Snacks & Sweets (Knabberzeug & Süßes)",
+        items: [
+          { de: "Kartoffelchips", en: "Potato Chips" }, { de: "Erdnüsse / Nüsse", en: "Nuts" },
+          { de: "Studentenfutter", en: "Trail Mix" }, { de: "Dunkle Schokolade", en: "Dark Chocolate" },
+          { de: "Gummibärchen", en: "Gummy Bears" }, { de: "Kekse", en: "Cookies" }
+        ]
+      },
+      {
+        id: "cat_frozen",
+        aisle: "7. 🧊 Frozen Foods (Tiefkühl)",
+        items: [
+          { de: "TK Erbsen", en: "Frozen Peas" }, { de: "TK Beeren-Mix", en: "Frozen Berries" },
+          { de: "TK Pizza", en: "Frozen Pizza" }, { de: "TK Pommes", en: "French Fries" }
+        ]
+      },
+      {
+        id: "cat_drinks",
+        aisle: "8. 🧃 Drinks & Beverages (Getränke)",
+        items: [
+          { de: "Mineralwasser (Sprudel)", en: "Sparkling Water" }, { de: "Stilles Wasser", en: "Still Water" },
+          { de: "Apfelschorle", en: "Apple Spritzer" }, { de: "Orangensaft", en: "Orange Juice" },
+          { de: "Haferdrink", en: "Oat Milk" }, { de: "Kaffeebohnen", en: "Coffee Beans" },
+          { de: "Tee", en: "Tea" }, { de: "Bier", en: "Beer" }, { de: "Wein", en: "Wine" }
+        ]
+      },
+      {
+        id: "cat_household",
+        aisle: "9. 🧼 Household & Care (Haushalt & Pflege)",
+        items: [
+          { de: "Toilettenpapier", en: "Toilet Paper" }, { de: "Küchenrolle", en: "Paper Towels" },
+          { de: "Spülmittel", en: "Dish Soap" }, { de: "Spülmaschinentabs", en: "Dishwasher Tabs" },
+          { de: "Waschmittel", en: "Laundry Detergent" }, { de: "Müllbeutel", en: "Trash Bags" }
+        ]
+      }
+    ];
+
+    let activeItems = {};
+    let historyLogs = [];
+    let collapsedState = {};
+
+    if(db) {
+      db.ref('activeList').on('value', (snapshot) => {
+        activeItems = snapshot.val() || {};
+        renderAll();
       });
-
-      titleInput.value = '';
+      db.ref('history').on('value', (snapshot) => {
+        const data = snapshot.val();
+        historyLogs = data ? Object.values(data) : [];
+        renderHistory();
+      });
     }
 
-    // Handle initial item typing submit -> Opens Modal
-    function handleItemSubmit(e) {
-      e.preventDefault();
-      const input = document.getElementById('itemNameInput');
-      const val = input.value.trim();
-      if (!val) return;
-
-      let detectedCat = 'Other';
-      const lower = val.toLowerCase();
-
-      for (const [cat, keywords] of Object.entries(categoryKeywords)) {
-        if (keywords.some(k => lower.includes(k))) {
-          detectedCat = cat;
-          break;
-        }
+    function toggleCategoryCollapse(catId) {
+      collapsedState[catId] = !collapsedState[catId];
+      const card = document.getElementById(catId);
+      if(card) {
+        card.classList.toggle('collapsed', !!collapsedState[catId]);
       }
-
-      pendingItem = {
-        name: val,
-        category: detectedCat,
-        icon: categoryIcons[detectedCat] || '🛒'
-      };
-
-      document.getElementById('modalItemTitle').textContent = val;
-      document.getElementById('modalCategoryIcon').textContent = pendingItem.icon;
-      document.getElementById('modalQtyVal').value = 1;
-      document.getElementById('modalUnitSelect').value = 'pcs';
-      document.getElementById('qtyModal').classList.remove('hidden');
     }
 
-    function adjustQty(delta) {
-      const input = document.getElementById('modalQtyVal');
-      let current = parseFloat(input.value) || 1;
-      current = Math.max(0.1, current + delta);
-      input.value = current;
-    }
+    function renderCatalog() {
+      const container = document.getElementById('catalog-container');
+      container.innerHTML = '';
 
-    function closeQtyModal() {
-      document.getElementById('qtyModal').classList.add('hidden');
-    }
-
-    // Confirm Modal -> Adds item to active list
-    function confirmAddItem() {
-      const listKeys = Object.keys(allLists);
-      
-      // If no list exists yet, create default list automatically
-      if (listKeys.length === 0) {
-        const newListRef = db.ref('lists').push();
-        const listId = newListRef.key;
-        newListRef.set({
-          title: "New List 1",
-          createdAt: Date.now()
+      grocefyCatalog.forEach((cat) => {
+        const card = document.createElement('div');
+        card.id = cat.id;
+        const isCollapsed = !!collapsedState[cat.id];
+        card.className = `category-card ${isCollapsed ? 'collapsed' : ''}`;
+        
+        let itemsHTML = '';
+        cat.items.forEach(item => {
+          const isAdded = !!activeItems[item.de];
+          itemsHTML += `
+            <div class="item-row">
+              <div class="item-info">
+                <span class="item-de">${item.de}</span>
+                <span class="item-en">${item.en}</span>
+              </div>
+              <button class="btn-add ${isAdded ? 'added' : ''}" onclick="toggleItem('${item.de}', '${cat.aisle}', '${item.en}')">
+                ${isAdded ? '✓ Added' : '+ Add'}
+              </button>
+            </div>
+          `;
         });
-        saveItemToList(listId);
+
+        card.innerHTML = `
+          <div class="category-header" onclick="toggleCategoryCollapse('${cat.id}')">
+            <span>${cat.aisle}</span>
+            <span class="arrow">▼</span>
+          </div>
+          <div class="item-list">${itemsHTML}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function toggleItem(name, aisle, enTranslation) {
+      if(activeItems[name]) {
+        delete activeItems[name];
       } else {
-        // Add to the most recently created list
-        const latestListId = listKeys[listKeys.length - 1];
-        saveItemToList(latestListId);
+        activeItems[name] = { name: name, en: enTranslation || '', aisle: aisle, checked: false };
       }
-
-      closeQtyModal();
-      document.getElementById('itemNameInput').value = '';
+      saveActive();
     }
 
-    function saveItemToList(listId) {
-      const qty = parseFloat(document.getElementById('modalQtyVal').value) || 1;
-      const unit = document.getElementById('modalUnitSelect').value;
-      const itemKey = pendingItem.name.toLowerCase().replace(/[.#$/\[\]]/g, "_");
-
-      db.ref(`lists/${listId}/items/${itemKey}`).set({
-        name: pendingItem.name,
-        qty: qty,
-        unit: unit,
-        category: pendingItem.category,
-        icon: pendingItem.icon,
-        checked: false,
-        createdAt: Date.now()
-      });
-
-      // Save to history automatically
-      db.ref(`history/${itemKey}`).set({
-        name: pendingItem.name,
-        category: pendingItem.category,
-        unit: unit,
-        lastUsed: Date.now()
-      });
+    function toggleCheck(name) {
+      if(activeItems[name]) {
+        activeItems[name].checked = !activeItems[name].checked;
+        saveActive();
+      }
     }
 
-    // Render Lists
-    function renderLists() {
-      const container = document.getElementById('listsContainer');
-      const listKeys = Object.keys(allLists);
-      document.getElementById('activeListsCount').textContent = listKeys.length;
+    function addCustomItem() {
+      const input = document.getElementById('custom-input');
+      const val = input.value.trim();
+      if(val) {
+        activeItems[val] = { name: val, en: '', aisle: "5. 🥫 Pantry & Canned (Vorrat & Haltbares)", checked: false };
+        input.value = '';
+        saveActive();
+      }
+    }
 
-      if (listKeys.length === 0) {
-        container.innerHTML = `
-          <div class="text-center py-10 bg-white rounded-xl border border-dashed border-gray-300">
-            <span class="text-3xl">📝</span>
-            <p class="text-gray-500 font-medium mt-2 text-sm">No shopping lists yet.</p>
-            <p class="text-xs text-gray-400">Type an item name above or create a list title to begin.</p>
-          </div>`;
+    function saveActive() {
+      if(db) {
+        db.ref('activeList').set(activeItems);
+      } else {
+        renderAll();
+      }
+    }
+
+    function renderShoppingList() {
+      const container = document.getElementById('active-list-container');
+      container.innerHTML = '';
+
+      const itemsArr = Object.values(activeItems);
+      if(itemsArr.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">Your Grocefy list is empty!</p>`;
         return;
       }
 
-      let html = '';
-      listKeys.forEach(listId => {
-        const list = allLists[listId];
-        const items = list.items || {};
-        const itemKeys = Object.keys(items);
+      itemsArr.sort((a, b) => a.aisle.localeCompare(b.aisle));
 
-        html += `
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <!-- List Header -->
-            <div class="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex justify-between items-center">
-              <div class="flex items-center gap-2">
-                <i class="fa-solid fa-list-ul text-indigo-600 text-xs"></i>
-                <h3 class="font-bold text-gray-800 text-sm">${list.title}</h3>
-                <span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-semibold">${itemKeys.length}</span>
-              </div>
-              <button onclick="deleteList('${listId}')" class="text-gray-400 hover:text-red-500 text-xs transition p-1">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
-            </div>
-
-            <!-- List Items -->
-            <div class="divide-y divide-gray-100">
+      itemsArr.forEach(item => {
+        const div = document.createElement('div');
+        div.className = `check-item ${item.checked ? 'done' : ''}`;
+        div.innerHTML = `
+          <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleCheck('${item.name}')">
+          <div style="flex:1;">
+            <div style="font-weight: 600;">${item.name} ${item.en ? `<span style="font-weight:normal; color:var(--subtext); font-size:0.85rem;">(${item.en})</span>` : ''}</div>
+            <div style="font-size:0.75rem; color: var(--subtext);">${item.aisle}</div>
+          </div>
         `;
-
-        if (itemKeys.length === 0) {
-          html += `<div class="p-3 text-center text-xs text-gray-400">No items added to this list yet.</div>`;
-        } else {
-          itemKeys.forEach(itemKey => {
-            const item = items[itemKey];
-            const isChecked = item.checked ? 'checked' : '';
-            const lineThrough = item.checked ? 'line-through text-gray-400' : 'text-gray-800 font-medium';
-
-            html += `
-              <div class="p-3 flex items-center justify-between hover:bg-gray-50 transition">
-                <label class="flex items-center gap-3 flex-1 cursor-pointer">
-                  <input type="checkbox" ${isChecked} onchange="toggleItemCheck('${listId}', '${itemKey}', ${!item.checked})"
-                    class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
-                  <span class="text-base">${item.icon || '🛒'}</span>
-                  <span class="${lineThrough} text-sm">${item.name}</span>
-                  <span class="text-xs font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md">
-                    ${item.qty} ${item.unit}
-                  </span>
-                </label>
-                <button onclick="deleteItem('${listId}', '${itemKey}')" class="text-gray-300 hover:text-red-500 p-1 transition">
-                  <i class="fa-solid fa-xmark text-base"></i>
-                </button>
-              </div>
-            `;
-          });
-        }
-
-        html += `</div></div>`;
+        container.appendChild(div);
       });
-
-      container.innerHTML = html;
     }
 
-    function toggleItemCheck(listId, itemKey, newChecked) {
-      db.ref(`lists/${listId}/items/${itemKey}/checked`).set(newChecked);
+    function renderAll() {
+      const count = Object.keys(activeItems).length;
+      document.getElementById('cart-count').innerText = count;
+      document.getElementById('bar-count').innerText = `${count} ${count === 1 ? 'Item' : 'Items'} selected`;
+      renderCatalog();
+      renderShoppingList();
     }
 
-    function deleteItem(listId, itemKey) {
-      db.ref(`lists/${listId}/items/${itemKey}`).remove();
+    function finishShopping() {
+      if(Object.keys(activeItems).length === 0) return;
+      
+      const newEntry = {
+        date: new Date().toLocaleString(),
+        items: Object.keys(activeItems)
+      };
+
+      if(db) {
+        db.ref('history').push(newEntry);
+        db.ref('activeList').remove();
+      } else {
+        activeItems = {};
+        renderAll();
+      }
+      switchTab('history');
     }
 
-    function deleteList(listId) {
-      if (confirm('Are you sure you want to delete this list?')) {
-        db.ref(`lists/${listId}`).remove();
+    function renderHistory() {
+      const container = document.getElementById('history-container');
+      container.innerHTML = '';
+      if(historyLogs.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">No past shopping trips logged yet.</p>`;
+        return;
+      }
+      historyLogs.slice().reverse().forEach(log => {
+        const div = document.createElement('div');
+        div.className = 'history-card';
+        div.innerHTML = `
+          <div class="history-date">📅 ${log.date}</div>
+          <div style="font-size: 0.9rem; color: var(--text);">${log.items.join(', ')}</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+      
+      const mainBtn = document.getElementById('main-cta');
+
+      if(tab === 'catalog') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.getElementById('catalog-view').classList.add('active');
+        mainBtn.innerText = "Go to Shopping List ➔";
+        mainBtn.onclick = () => switchTab('shopping');
+      } else if(tab === 'shopping') {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.getElementById('shopping-view').classList.add('active');
+        mainBtn.innerText = "Finish List ✓";
+        mainBtn.onclick = finishShopping;
+      } else {
+        document.querySelectorAll('.tab-btn')[2].classList.add('active');
+        document.getElementById('history-view').classList.add('active');
+        mainBtn.innerText = "+ New Shopping Trip";
+        mainBtn.onclick = () => switchTab('catalog');
       }
     }
+
+    renderAll();
   </script>
 </body>
 </html>
