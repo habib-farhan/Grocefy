@@ -6,6 +6,7 @@
   <title>Grocefy - Smart Grocery & Partner Sync</title>
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="config.js"></script>
   <style>
@@ -238,7 +239,7 @@
     let historyLogs = [];
     let collapsedState = {};
 
-    if(db) {
+    function attachRealtimeListeners() {
       db.ref('activeList').on('value', (snapshot) => {
         activeItems = snapshot.val() || {};
         renderAll();
@@ -247,6 +248,20 @@
         const data = snapshot.val();
         historyLogs = data ? Object.values(data) : [];
         renderHistory();
+      });
+    }
+
+    // Silent anonymous sign-in: gives every device a token so the database
+    // rules can require "must be signed in" instead of being wide open.
+    // No UI shown to the user for this yet (that comes in v2's name picker).
+    if(db) {
+      firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+          attachRealtimeListeners();
+        }
+      });
+      firebase.auth().signInAnonymously().catch((err) => {
+        console.warn("Anonymous sign-in failed. Running in local-only mode.", err);
       });
     }
 
@@ -270,7 +285,7 @@
         
         let itemsHTML = '';
         cat.items.forEach(item => {
-          const isAdded = !!activeItems[item.de];
+          const isAdded = !!activeItems[sanitizeKey(item.de)];
           itemsHTML += `
             <div class="item-row">
               <div class="item-info">
@@ -295,19 +310,51 @@
       });
     }
 
-    function toggleItem(name, aisle, enTranslation) {
-      if(activeItems[name]) {
-        delete activeItems[name];
+    // Firebase Realtime Database keys can't contain . # $ [ ] /
+    // A few German item names (e.g. "Karotten / Möhren") contain a slash,
+    // which used to make writes fail silently. This makes a safe key while
+    // the real display name stays intact inside the stored item object.
+    function sanitizeKey(str) {
+      return str.replace(/[.#$\[\]\/]/g, '_');
+    }
+
+    function addActiveItem(key, itemData) {
+      activeItems[key] = itemData;
+      if(db) {
+        db.ref('activeList/' + key).set(itemData);
       } else {
-        activeItems[name] = { name: name, en: enTranslation || '', aisle: aisle, checked: false };
+        renderAll();
       }
-      saveActive();
+    }
+
+    function removeActiveItem(key) {
+      delete activeItems[key];
+      if(db) {
+        db.ref('activeList/' + key).remove();
+      } else {
+        renderAll();
+      }
+    }
+
+    function toggleItem(name, aisle, enTranslation) {
+      const key = sanitizeKey(name);
+      if(activeItems[key]) {
+        removeActiveItem(key);
+      } else {
+        addActiveItem(key, { name: name, en: enTranslation || '', aisle: aisle, checked: false });
+      }
     }
 
     function toggleCheck(name) {
-      if(activeItems[name]) {
-        activeItems[name].checked = !activeItems[name].checked;
-        saveActive();
+      const key = sanitizeKey(name);
+      if(activeItems[key]) {
+        const newChecked = !activeItems[key].checked;
+        activeItems[key].checked = newChecked;
+        if(db) {
+          db.ref('activeList/' + key + '/checked').set(newChecked);
+        } else {
+          renderAll();
+        }
       }
     }
 
@@ -315,17 +362,9 @@
       const input = document.getElementById('custom-input');
       const val = input.value.trim();
       if(val) {
-        activeItems[val] = { name: val, en: '', aisle: "5. 🥫 Pantry & Canned (Vorrat & Haltbares)", checked: false };
+        const key = sanitizeKey(val);
+        addActiveItem(key, { name: val, en: '', aisle: "5. 🥫 Pantry & Canned (Vorrat & Haltbares)", checked: false });
         input.value = '';
-        saveActive();
-      }
-    }
-
-    function saveActive() {
-      if(db) {
-        db.ref('activeList').set(activeItems);
-      } else {
-        renderAll();
       }
     }
 
@@ -368,7 +407,7 @@
       
       const newEntry = {
         date: new Date().toLocaleString(),
-        items: Object.keys(activeItems)
+        items: Object.values(activeItems).map(item => item.name)
       };
 
       if(db) {
