@@ -1,20 +1,30 @@
 <!--
-  Grocefy — v3 (Multi-List Data Model + My Lists)
+  Grocefy — v9 (Multi-User Sharing + Notifications) — FINAL VERSION
   Generated: 2026-08-14
-  Includes: v1 (security rules prep, key sanitization, per-item writes)
+  Includes: v1 (security rules, key sanitization, per-item writes)
           + v2 (name/avatar login, remembered per device)
           + v2.1 (icon avatars, header shows icon+name, profile dropdown)
-          + v3 (replaces single activeList+history with a 'lists' node;
-                Catalog builds a draft -> Save -> shows in My Lists ->
-                open to shop -> Finalize -> moves to History;
-                My Lists/History scoped to lists you own or that are
-                shared with you; delete-a-saved-list added)
+          + v3 (multi-list data model, My Lists, Shopping Mode, delete list)
+          + v4 (~40 new items, Cat Supplies category, expanded Household,
+                permanent custom items with auto-categorization, Other
+                catch-all category)
+          + v5 (History count + delete)
+          + v6 (custom categories via inline emoji+name mini-form)
+          + v7 (per-item emoji icons across Catalog/Current List/Shopping
+                Mode, with category-emoji fallback for custom items)
+          + v8 (quantity & unit selector popup on add; includes v8.1
+                bugfix for "Add to List" doing nothing)
+          + v9 (Share button on your own My Lists cards, picks from
+                registered users, updates sharedWith. Recipient gets a
+                persistent notification — bell icon in header with unread
+                badge — plus a live toast if already in the app. While
+                shopping a shared list, a toast surfaces when someone else
+                adds an item, naming who and what, via a new addedBy field
+                on items. Verified end-to-end against a simulated two-user
+                real-time sync, not just reviewed as code.)
 
-  ACTION NEEDED IN FIREBASE CONSOLE BEFORE USING THIS VERSION:
-  Go to Realtime Database > Data tab and delete the old top-level
-  'activeList' and 'history' nodes (right-click / trash icon on each).
-  No rules changes needed — the existing "auth != null" rule already
-  covers the new 'lists' node.
+  No Firebase Console changes needed for this version — existing
+  "auth != null" rule already covers the new 'notifications' node.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -102,7 +112,8 @@
     .avatar-option { display: flex; align-items: center; justify-content: center; padding: 8px 0; border-radius: 10px; border: 1.5px solid var(--border); background: var(--mint-bg); cursor: pointer; transition: all 0.15s; }
     .avatar-option.selected { border-color: var(--primary-accent); background: var(--light-green); box-shadow: 0 0 0 2px var(--primary-accent) inset; }
 
-    .header-user-badge { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.4); border-radius: 999px; padding: 4px 12px 4px 4px; cursor: pointer; max-width: 170px; }
+    .header-controls { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 10px; }
+    .header-user-badge { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.4); border-radius: 999px; padding: 4px 12px 4px 4px; cursor: pointer; max-width: 170px; }
     .header-user-name { color: white; font-size: 0.85rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .user-dropdown { position: absolute; top: 100%; right: 14px; margin-top: 8px; z-index: 150; background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 24px rgba(27,67,50,0.15); padding: 16px; width: 260px; }
@@ -120,6 +131,52 @@
     .list-card-title { font-weight: 700; color: var(--primary); font-size: 0.98rem; }
     .list-card-meta { font-size: 0.78rem; color: var(--subtext); margin-top: 2px; }
     .list-card-delete { background: none; border: none; color: #b45309; font-size: 1rem; cursor: pointer; padding: 4px 6px; line-height: 1; }
+
+    /* --- v7: item icons --- */
+    .item-icon { font-size: 1.3rem; margin-right: 10px; flex-shrink: 0; }
+
+    /* --- v8: quantity & unit --- */
+    .qty-modal-overlay { position: fixed; inset: 0; background: rgba(27,67,50,0.35); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .qty-modal-overlay.hidden { display: none; }
+    .qty-modal-card { background: var(--card-bg); border-radius: 16px; padding: 24px; max-width: 340px; width: 100%; box-shadow: 0 8px 24px rgba(27,67,50,0.2); }
+    .qty-stepper { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 16px; }
+    .qty-stepper button { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--border); background: var(--mint-bg); color: var(--primary-accent); font-size: 1.3rem; font-weight: 700; cursor: pointer; }
+    #qty-value-input { width: 80px; text-align: center; font-size: 1.2rem; font-weight: 700; border: 1.5px solid var(--border); border-radius: 10px; padding: 8px; }
+    #qty-value-input:focus { outline: none; border-color: var(--primary-accent); }
+    .unit-chip-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .unit-chip { padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--mint-bg); color: var(--text); font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+    .unit-chip.selected { background: var(--primary-accent); color: white; border-color: var(--primary-accent); }
+    .qty-modal-cancel { background: none; border: 1.5px solid var(--border); color: var(--subtext); padding: 12px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; }
+    .qty-badge { display: inline-block; background: var(--light-green); color: var(--primary); font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+
+    /* --- v9: sharing & notifications --- */
+    .notif-bell { position: relative; width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; cursor: pointer; }
+    .notif-badge { position: absolute; top: -4px; right: -4px; background: #d1462f; color: white; font-size: 0.65rem; font-weight: 700; border-radius: 999px; padding: 1px 5px; min-width: 16px; text-align: center; }
+    .notif-badge.hidden { display: none; }
+    .notif-dropdown { position: absolute; top: 100%; right: 70px; margin-top: 8px; z-index: 150; background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 24px rgba(27,67,50,0.15); padding: 16px; width: 280px; max-height: 320px; overflow-y: auto; }
+    .notif-dropdown.hidden { display: none; }
+
+    .toast-container { position: fixed; bottom: 90px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 600; pointer-events: none; padding: 0 16px; }
+    .toast { background: var(--primary); color: white; padding: 10px 18px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); opacity: 1; transition: opacity 0.4s ease; max-width: 100%; text-align: center; }
+    .toast.toast-fade { opacity: 0; }
+
+    .list-card-actions { display: flex; gap: 6px; align-items: center; }
+    .list-card-share { background: none; border: 1.5px solid var(--border); color: var(--primary-accent); font-size: 0.75rem; font-weight: 700; cursor: pointer; padding: 4px 10px; border-radius: 8px; }
+    .list-card-shared-meta { font-size: 0.75rem; color: var(--primary-accent); margin-top: 4px; }
+    .share-user-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 10px; cursor: pointer; }
+    .share-user-row input { width: 18px; height: 18px; accent-color: var(--primary-accent); }
+
+    /* --- v4: living catalog --- */
+    .custom-category-row { margin-bottom: 16px; }
+    #custom-category-select { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.9rem; background: white; color: var(--text); }
+    #custom-category-select:focus { outline: none; border-color: var(--primary-accent); }
+
+    .new-category-form { display: flex; gap: 8px; margin-top: 8px; }
+    .new-category-form.hidden { display: none; }
+    #new-category-emoji { width: 56px; text-align: center; padding: 10px 6px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 1rem; background: white; }
+    #new-category-name { flex: 1; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.9rem; background: white; }
+    #new-category-emoji:focus, #new-category-name:focus { outline: none; border-color: var(--primary-accent); }
+    .new-category-form button { background: var(--primary-accent); color: white; border: none; padding: 0 16px; border-radius: 10px; font-weight: bold; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -141,12 +198,38 @@
     </div>
   </div>
 
+  <!-- QUANTITY / UNIT PICKER MODAL -->
+  <div id="qty-modal-overlay" class="qty-modal-overlay hidden">
+    <div class="qty-modal-card">
+      <div id="qty-modal-item-name" style="font-weight:700; font-size:1.05rem; color:var(--primary); margin-bottom:16px; text-align:center;"></div>
+      <div class="qty-stepper">
+        <button onclick="adjustQty(-1)">−</button>
+        <input type="number" id="qty-value-input" value="1" step="any">
+        <button onclick="adjustQty(1)">+</button>
+      </div>
+      <div id="unit-chip-row" class="unit-chip-row"></div>
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="qty-modal-cancel" onclick="closeQtyModal()">Cancel</button>
+        <button id="qty-modal-confirm-btn" class="btn-primary" style="flex:1;" onclick="confirmAddWithQty()">Add to List</button>
+      </div>
+    </div>
+  </div>
+
   <header>
     <h1>🌱 Grocefy</h1>
     <p>Live Sync Grocery List</p>
-    <div id="header-user-badge" class="header-user-badge" onclick="toggleUserDropdown()">
-      <span id="header-avatar-icon"></span>
-      <span id="header-user-name" class="header-user-name"></span>
+    <div class="header-controls">
+      <div id="notif-bell" class="notif-bell" onclick="toggleNotifDropdown()">
+        🔔<span id="notif-badge" class="notif-badge hidden">0</span>
+      </div>
+      <div id="header-user-badge" class="header-user-badge" onclick="toggleUserDropdown()">
+        <span id="header-avatar-icon"></span>
+        <span id="header-user-name" class="header-user-name"></span>
+      </div>
+    </div>
+    <div id="notif-dropdown" class="notif-dropdown hidden">
+      <div style="font-weight:700; color:var(--primary); margin-bottom:8px;">Notifications</div>
+      <div id="notif-list"></div>
     </div>
     <div id="user-dropdown" class="user-dropdown hidden">
       <div class="user-dropdown-header">
@@ -164,17 +247,40 @@
     </div>
   </header>
 
+  <!-- SHARE LIST MODAL -->
+  <div id="share-modal-overlay" class="qty-modal-overlay hidden">
+    <div class="qty-modal-card">
+      <div style="font-weight:700; font-size:1.05rem; color:var(--primary); margin-bottom:6px; text-align:center;">Share List</div>
+      <div id="share-modal-list-title" style="font-size:0.85rem; color:var(--subtext); margin-bottom:16px; text-align:center;"></div>
+      <div id="share-user-list" style="display:flex; flex-direction:column; gap:8px; max-height:240px; overflow-y:auto;"></div>
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="qty-modal-cancel" onclick="closeShareModal()">Cancel</button>
+        <button class="btn-primary" style="flex:1;" onclick="confirmShare()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
   <div class="nav-tabs">
     <button class="tab-btn active" onclick="switchView('catalog')">Catalog</button>
     <button class="tab-btn" onclick="switchView('mylists')">My Lists (<span id="mylists-tab-count">0</span>)</button>
-    <button class="tab-btn" onclick="switchView('history')">History</button>
+    <button class="tab-btn" onclick="switchView('history')">History (<span id="history-tab-count">0</span>)</button>
   </div>
 
   <!-- CATALOG VIEW -->
   <div id="catalog-view" class="view active">
     <div class="custom-add">
-      <input type="text" id="custom-input" placeholder="Add custom item...">
+      <input type="text" id="custom-input" placeholder="Add custom item..." oninput="onCustomInputChange()">
       <button onclick="addCustomItem()">+ Add</button>
+    </div>
+    <div id="custom-category-row" class="custom-category-row" style="display:none;">
+      <select id="custom-category-select" onchange="onCategorySelectChange()"></select>
+      <div id="new-category-form" class="new-category-form hidden">
+        <input type="text" id="new-category-emoji" placeholder="🏷️" maxlength="4">
+        <input type="text" id="new-category-name" placeholder="Category name">
+        <button onclick="createNewCategory()">Create</button>
+      </div>
     </div>
     <div id="catalog-container"></div>
   </div>
@@ -332,6 +438,7 @@
     }
 
     function toggleUserDropdown() {
+      document.getElementById('notif-dropdown').classList.add('hidden');
       const dropdown = document.getElementById('user-dropdown');
       if (dropdown.classList.contains('hidden')) {
         renderUserDropdown();
@@ -344,9 +451,17 @@
     document.addEventListener('click', (e) => {
       const dropdown = document.getElementById('user-dropdown');
       const badge = document.getElementById('header-user-badge');
-      if (!dropdown || !badge || dropdown.classList.contains('hidden')) return;
-      if (!dropdown.contains(e.target) && !badge.contains(e.target)) {
-        dropdown.classList.add('hidden');
+      if (dropdown && badge && !dropdown.classList.contains('hidden')) {
+        if (!dropdown.contains(e.target) && !badge.contains(e.target)) {
+          dropdown.classList.add('hidden');
+        }
+      }
+      const notifDropdown = document.getElementById('notif-dropdown');
+      const bell = document.getElementById('notif-bell');
+      if (notifDropdown && bell && !notifDropdown.classList.contains('hidden')) {
+        if (!notifDropdown.contains(e.target) && !bell.contains(e.target)) {
+          notifDropdown.classList.add('hidden');
+        }
       }
     });
 
@@ -387,6 +502,7 @@
       recordLogin(name, selectedAvatar);
       updateHeaderBadge();
       closeLoginOverlay();
+      if (db) attachNotificationsListener();
     }
 
     // On load: skip straight into the app if this device already has a
@@ -424,7 +540,11 @@
           { de: "Eisbergsalat", en: "Iceberg Lettuce" }, { de: "Rucola", en: "Arugula" },
           { de: "Zwiebeln", en: "Onions" }, { de: "Knoblauch", en: "Garlic" },
           { de: "Ingwer", en: "Ginger" }, { de: "Kartoffeln", en: "Potatoes" },
-          { de: "Süßkartoffeln", en: "Sweet Potatoes" }, { de: "Kräuter (Basilikum/Petersilie)", en: "Herbs" }
+          { de: "Süßkartoffeln", en: "Sweet Potatoes" }, { de: "Kräuter (Basilikum/Petersilie)", en: "Herbs" },
+          { de: "Pfirsiche", en: "Peaches" }, { de: "Birnen", en: "Pears" },
+          { de: "Kiwi", en: "Kiwi" }, { de: "Sellerie", en: "Celery" },
+          { de: "Frühlingszwiebeln", en: "Spring Onions" }, { de: "Rosenkohl", en: "Brussels Sprouts" },
+          { de: "Radieschen", en: "Radishes" }
         ]
       },
       {
@@ -434,7 +554,10 @@
           { de: "Vollkornbrot", en: "Whole Grain Bread" }, { de: "Toastbrot", en: "Toast Bread" },
           { de: "Brötchen", en: "Bread Rolls" }, { de: "Laugengebäck", en: "Pretzels" },
           { de: "Croissants", en: "Croissants" }, { de: "Pita / Fladenbrot", en: "Pita Bread" },
-          { de: "Tortilla Wraps", en: "Tortilla Wraps" }, { de: "Baguette", en: "Baguette" }
+          { de: "Tortilla Wraps", en: "Tortilla Wraps" }, { de: "Baguette", en: "Baguette" },
+          { de: "Roggenbrot", en: "Rye Bread" }, { de: "Ciabatta", en: "Ciabatta" },
+          { de: "Mehrkornbrötchen", en: "Multigrain Rolls" }, { de: "Waffeln", en: "Waffles" },
+          { de: "Kuchen", en: "Cake" }
         ]
       },
       {
@@ -448,7 +571,10 @@
           { de: "Schmand / Saure Sahne", en: "Sour Cream" }, { de: "Schlagsahne", en: "Whipping Cream" },
           { de: "Gouda Scheiben", en: "Sliced Gouda" }, { de: "Mozzarella", en: "Mozzarella" },
           { de: "Feta / Hirtenkäse", en: "Feta Cheese" }, { de: "Frischkäse", en: "Cream Cheese" },
-          { de: "Eier (Freiland)", en: "Free-range Eggs" }, { de: "Tofu", en: "Tofu" }
+          { de: "Eier (Freiland)", en: "Free-range Eggs" }, { de: "Tofu", en: "Tofu" },
+          { de: "Skyr", en: "Skyr" }, { de: "Kefir", en: "Kefir" },
+          { de: "Buttermilch", en: "Buttermilk" }, { de: "Parmesan", en: "Parmesan" },
+          { de: "Streichkäse", en: "Cream Cheese Spread" }
         ]
       },
       {
@@ -458,7 +584,10 @@
           { de: "Hähnchenbrust", en: "Chicken Breast" }, { de: "Hackfleisch (Rind/Gemischt)", en: "Minced Meat" },
           { de: "Rindersteak", en: "Beef Steak" }, { de: "Bacon / Frühstücksspeck", en: "Bacon" },
           { de: "Kochschinken", en: "Cooked Ham" }, { de: "Salami", en: "Salami" },
-          { de: "Lachsfillet", en: "Salmon Filet" }, { de: "Thunfisch (Dose)", en: "Canned Tuna" }
+          { de: "Lachsfillet", en: "Salmon Filet" }, { de: "Thunfisch (Dose)", en: "Canned Tuna" },
+          { de: "Pute", en: "Turkey" }, { de: "Schweineschnitzel", en: "Pork Schnitzel" },
+          { de: "Bratwurst", en: "Bratwurst" }, { de: "Wiener Würstchen", en: "Hot Dogs" },
+          { de: "Garnelen", en: "Shrimp" }, { de: "Forelle", en: "Trout" }
         ]
       },
       {
@@ -473,7 +602,12 @@
           { de: "Zucker", en: "Sugar" }, { de: "Salz", en: "Salt" },
           { de: "Olivenöl", en: "Olive Oil" }, { de: "Sonnenblumenöl", en: "Sunflower Oil" },
           { de: "Ketchup", en: "Ketchup" }, { de: "Mayonnaise", en: "Mayonnaise" },
-          { de: "Pesto (Grün/Rot)", en: "Pesto" }, { de: "Nutella", en: "Hazelnut Spread" }
+          { de: "Pesto (Grün/Rot)", en: "Pesto" }, { de: "Nutella", en: "Hazelnut Spread" },
+          { de: "Linsen", en: "Lentils" }, { de: "Couscous", en: "Couscous" },
+          { de: "Quinoa", en: "Quinoa" }, { de: "Backpulver", en: "Baking Powder" },
+          { de: "Vanillezucker", en: "Vanilla Sugar" }, { de: "Essig", en: "Vinegar" },
+          { de: "Senf", en: "Mustard" }, { de: "Sojasauce", en: "Soy Sauce" },
+          { de: "Honig", en: "Honey" }, { de: "Currypaste", en: "Curry Paste" }
         ]
       },
       {
@@ -482,7 +616,10 @@
         items: [
           { de: "Kartoffelchips", en: "Potato Chips" }, { de: "Erdnüsse / Nüsse", en: "Nuts" },
           { de: "Studentenfutter", en: "Trail Mix" }, { de: "Dunkle Schokolade", en: "Dark Chocolate" },
-          { de: "Gummibärchen", en: "Gummy Bears" }, { de: "Kekse", en: "Cookies" }
+          { de: "Gummibärchen", en: "Gummy Bears" }, { de: "Kekse", en: "Cookies" },
+          { de: "Salzstangen", en: "Pretzel Sticks" }, { de: "Popcorn", en: "Popcorn" },
+          { de: "Reiswaffeln", en: "Rice Cakes" }, { de: "Marshmallows", en: "Marshmallows" },
+          { de: "Müsliriegel", en: "Granola Bars" }
         ]
       },
       {
@@ -490,7 +627,9 @@
         aisle: "7. 🧊 Frozen Foods (Tiefkühl)",
         items: [
           { de: "TK Erbsen", en: "Frozen Peas" }, { de: "TK Beeren-Mix", en: "Frozen Berries" },
-          { de: "TK Pizza", en: "Frozen Pizza" }, { de: "TK Pommes", en: "French Fries" }
+          { de: "TK Pizza", en: "Frozen Pizza" }, { de: "TK Pommes", en: "French Fries" },
+          { de: "TK Spinat", en: "Frozen Spinach" }, { de: "TK Fischstäbchen", en: "Fish Sticks" },
+          { de: "TK Hähnchennuggets", en: "Chicken Nuggets" }, { de: "Speiseeis", en: "Ice Cream" }
         ]
       },
       {
@@ -500,7 +639,9 @@
           { de: "Mineralwasser (Sprudel)", en: "Sparkling Water" }, { de: "Stilles Wasser", en: "Still Water" },
           { de: "Apfelschorle", en: "Apple Spritzer" }, { de: "Orangensaft", en: "Orange Juice" },
           { de: "Haferdrink", en: "Oat Milk" }, { de: "Kaffeebohnen", en: "Coffee Beans" },
-          { de: "Tee", en: "Tea" }, { de: "Bier", en: "Beer" }, { de: "Wein", en: "Wine" }
+          { de: "Tee", en: "Tea" }, { de: "Bier", en: "Beer" }, { de: "Wein", en: "Wine" },
+          { de: "Cola", en: "Cola" }, { de: "Limonade", en: "Lemonade" },
+          { de: "Mandelmilch", en: "Almond Milk" }, { de: "Energy Drink", en: "Energy Drink" }
         ]
       },
       {
@@ -509,10 +650,318 @@
         items: [
           { de: "Toilettenpapier", en: "Toilet Paper" }, { de: "Küchenrolle", en: "Paper Towels" },
           { de: "Spülmittel", en: "Dish Soap" }, { de: "Spülmaschinentabs", en: "Dishwasher Tabs" },
-          { de: "Waschmittel", en: "Laundry Detergent" }, { de: "Müllbeutel", en: "Trash Bags" }
+          { de: "Waschmittel", en: "Laundry Detergent" }, { de: "Müllbeutel", en: "Trash Bags" },
+          { de: "Shampoo", en: "Shampoo" }, { de: "Duschgel", en: "Shower Gel" },
+          { de: "Handseife", en: "Hand Soap" }, { de: "Allzweckreiniger", en: "All-Purpose Cleaner" },
+          { de: "WC-Reiniger", en: "Toilet Cleaner" }, { de: "Fensterreiniger", en: "Glass Cleaner" },
+          { de: "Weichspüler", en: "Fabric Softener" }, { de: "Deo", en: "Deodorant" },
+          { de: "Zahnpasta", en: "Toothpaste" }, { de: "Zahnbürste", en: "Toothbrush" },
+          { de: "Rasierer", en: "Razors" }, { de: "Papiertaschentücher", en: "Tissues" },
+          { de: "Feuchttücher", en: "Wet Wipes" }, { de: "Frischhaltefolie", en: "Plastic Wrap" },
+          { de: "Alufolie", en: "Aluminum Foil" }, { de: "Batterien", en: "Batteries" }
+        ]
+      },
+      {
+        id: "cat_petfood",
+        aisle: "10. 🐱 Cat Supplies (Katzenbedarf)",
+        items: [
+          { de: "Katzenfutter (trocken)", en: "Dry Cat Food" }, { de: "Katzenfutter (nass)", en: "Wet Cat Food" },
+          { de: "Katzenstreu", en: "Cat Litter" }, { de: "Katzensnacks", en: "Cat Treats" },
+          { de: "Katzenspielzeug", en: "Cat Toys" }
         ]
       }
     ];
+
+    // --- v7: item icons ---
+    // Emoji rather than image assets — no network calls, no hosting, no
+    // licensing concerns, and matches the emoji already used for category
+    // headers. Anything not explicitly mapped here (all custom items, and
+    // any built-in item I missed) falls back to its own category's emoji,
+    // extracted straight from the aisle label — so it always has *some*
+    // relevant icon with zero extra data model changes.
+    const ITEM_ICONS = {
+      // Produce
+      "Äpfel": "🍎", "Bananen": "🍌", "Tomaten": "🍅", "Salatgurke": "🥒",
+      "Avocado": "🥑", "Champignons": "🍄", "Zitronen": "🍋", "Limetten": "🍋",
+      "Orangen": "🍊", "Erdbeeren": "🍓", "Heidelbeeren": "🫐", "Weintrauben": "🍇",
+      "Karotten / Möhren": "🥕", "Paprika": "🫑", "Zucchini": "🥒", "Brokkoli": "🥦",
+      "Blumenkohl": "🥦", "Spinat": "🥬", "Eisbergsalat": "🥬", "Rucola": "🥬",
+      "Zwiebeln": "🧅", "Knoblauch": "🧄", "Ingwer": "🫚", "Kartoffeln": "🥔",
+      "Süßkartoffeln": "🍠", "Kräuter (Basilikum/Petersilie)": "🌿", "Pfirsiche": "🍑",
+      "Birnen": "🍐", "Kiwi": "🥝", "Sellerie": "🥬", "Frühlingszwiebeln": "🧅",
+      "Rosenkohl": "🥬", "Radieschen": "🔴",
+      // Bakery
+      "Vollkornbrot": "🍞", "Toastbrot": "🍞", "Brötchen": "🍞", "Laugengebäck": "🥨",
+      "Croissants": "🥐", "Pita / Fladenbrot": "🫓", "Tortilla Wraps": "🫓",
+      "Baguette": "🥖", "Roggenbrot": "🍞", "Ciabatta": "🍞", "Mehrkornbrötchen": "🍞",
+      "Waffeln": "🧇", "Kuchen": "🍰",
+      // Dairy
+      "H-Vollmilch": "🥛", "Fettarme Milch": "🥛", "Butter": "🧈", "Margarine": "🧈",
+      "Naturjoghurt": "🥣", "Fruchtjoghurt": "🥣", "Griechischer Joghurt": "🥣",
+      "Quark": "🥣", "Schmand / Saure Sahne": "🥣", "Schlagsahne": "🥛",
+      "Gouda Scheiben": "🧀", "Mozzarella": "🧀", "Feta / Hirtenkäse": "🧀",
+      "Frischkäse": "🧀", "Eier (Freiland)": "🥚", "Tofu": "⬜",
+      "Skyr": "🥣", "Kefir": "🥛", "Buttermilch": "🥛", "Parmesan": "🧀",
+      "Streichkäse": "🧀",
+      // Meat & Seafood
+      "Hähnchenbrust": "🍗", "Hackfleisch (Rind/Gemischt)": "🥩", "Rindersteak": "🥩",
+      "Bacon / Frühstücksspeck": "🥓", "Kochschinken": "🍖", "Salami": "🍖",
+      "Lachsfillet": "🐟", "Thunfisch (Dose)": "🥫", "Pute": "🦃",
+      "Schweineschnitzel": "🥩", "Bratwurst": "🌭", "Wiener Würstchen": "🌭",
+      "Garnelen": "🍤", "Forelle": "🐟",
+      // Pantry
+      "Haferflocken": "🌾", "Müsli / Granola": "🥣", "Spaghetti / Nudeln": "🍝",
+      "Basmati Reis": "🍚", "Passierte Tomaten": "🥫", "Gehackte Tomaten": "🥫",
+      "Kidneybohnen": "🫘", "Kichererbsen": "🫘", "Kokosmilch": "🥥", "Mehl": "🌾",
+      "Zucker": "🧂", "Salz": "🧂", "Olivenöl": "🫒", "Sonnenblumenöl": "🌻",
+      "Ketchup": "🍅", "Mayonnaise": "🥣", "Pesto (Grün/Rot)": "🌿",
+      "Nutella": "🍫", "Linsen": "🫘", "Couscous": "🍚", "Quinoa": "🍚",
+      "Backpulver": "🧁", "Vanillezucker": "🍦", "Essig": "🍶", "Senf": "🟡",
+      "Sojasauce": "🍶", "Honig": "🍯", "Currypaste": "🍛",
+      // Snacks & Sweets
+      "Kartoffelchips": "🍟", "Erdnüsse / Nüsse": "🥜", "Studentenfutter": "🥜",
+      "Dunkle Schokolade": "🍫", "Gummibärchen": "🐻", "Kekse": "🍪",
+      "Salzstangen": "🥨", "Popcorn": "🍿", "Reiswaffeln": "🍘",
+      "Marshmallows": "🍡", "Müsliriegel": "🍫",
+      // Frozen
+      "TK Erbsen": "🫛", "TK Beeren-Mix": "🫐", "TK Pizza": "🍕", "TK Pommes": "🍟",
+      "TK Spinat": "🥬", "TK Fischstäbchen": "🐟", "TK Hähnchennuggets": "🍗",
+      "Speiseeis": "🍨",
+      // Drinks
+      "Mineralwasser (Sprudel)": "💧", "Stilles Wasser": "💧", "Apfelschorle": "🍏",
+      "Orangensaft": "🧃", "Haferdrink": "🥛", "Kaffeebohnen": "☕", "Tee": "🍵",
+      "Bier": "🍺", "Wein": "🍷", "Cola": "🥤", "Limonade": "🍋",
+      "Mandelmilch": "🥛", "Energy Drink": "⚡",
+      // Household
+      "Toilettenpapier": "🧻", "Küchenrolle": "🧻", "Spülmittel": "🧽",
+      "Spülmaschinentabs": "🧼", "Waschmittel": "🧺", "Müllbeutel": "🗑️",
+      "Shampoo": "🧴", "Duschgel": "🧴", "Handseife": "🧼", "Allzweckreiniger": "🧴",
+      "WC-Reiniger": "🚽", "Fensterreiniger": "🪟", "Weichspüler": "🧺",
+      "Deo": "🧴", "Zahnpasta": "🦷", "Zahnbürste": "🪥", "Rasierer": "🪒",
+      "Papiertaschentücher": "🧻", "Feuchttücher": "🧻", "Frischhaltefolie": "🧻",
+      "Alufolie": "🧻", "Batterien": "🔋",
+      // Cat Supplies
+      "Katzenfutter (trocken)": "🐾", "Katzenfutter (nass)": "🥫",
+      "Katzenstreu": "🐾", "Katzensnacks": "🍖", "Katzenspielzeug": "🧶"
+    };
+
+    // Pulls the emoji straight out of an aisle label like "1. 🥦 Produce…"
+    // so custom items/categories automatically get *some* relevant icon
+    // (their category's) without needing any extra data stored per item.
+    function extractEmojiFromAisle(aisle) {
+      const match = (aisle || '').match(/^\d+\.\s*(\S+)/);
+      return match ? match[1] : '🛒';
+    }
+
+    function getItemIcon(name, aisle) {
+      return ITEM_ICONS[name] || extractEmojiFromAisle(aisle);
+    }
+
+    // --- v4: living catalog ---
+    // Custom items get saved permanently to Firebase (not just this one
+    // list) with a category, so they show up in the browsable Catalog
+    // from now on, exactly like the built-in items.
+    let customCatalogItems = {};
+
+    // --- v6: custom categories ---
+    // Users can create brand-new categories (e.g. "Baby Care"), not just
+    // fall into "Other". Stored in Firebase so everyone sees them.
+    let customCategories = {};
+
+    function getOrderedCustomCategories() {
+      return Object.entries(customCategories)
+        .sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0))
+        .map(([id, cat]) => Object.assign({ id: id }, cat));
+    }
+
+    // Consistent numbered label for any category id — built-in, custom,
+    // or the "Other" catch-all — so numbering never collides as new
+    // custom categories get added over time.
+    function categoryLabel(catId) {
+      const builtIn = grocefyCatalog.find(c => c.id === catId);
+      if (builtIn) return builtIn.aisle;
+
+      const custom = getOrderedCustomCategories();
+      if (catId === 'cat_other') {
+        const num = grocefyCatalog.length + 1 + custom.length;
+        return `${num}. 🗂️ Other (Sonstiges)`;
+      }
+      const idx = custom.findIndex(c => c.id === catId);
+      if (idx === -1) return catId;
+      const num = grocefyCatalog.length + 1 + idx;
+      return `${num}. ${custom[idx].emoji || '🏷️'} ${custom[idx].name}`;
+    }
+
+    // A lightweight keyword guesser (no AI call) — built from the words
+    // already in each category's item names, plus a few manual synonyms,
+    // plus custom categories' own names and whatever's already been saved
+    // into them, so guesses improve as the catalog grows.
+    const EXTRA_KEYWORDS = {
+      cat_produce: ["obst", "gemüse", "fruit", "vegetable", "salat", "frisch"],
+      cat_bakery: ["brot", "bread", "backwaren", "gebäck"],
+      cat_dairy: ["milch", "milk", "käse", "cheese", "joghurt", "yogurt", "sahne", "cream"],
+      cat_meat: ["fleisch", "meat", "fisch", "fish", "wurst", "sausage", "huhn", "chicken", "rind", "beef", "schwein", "pork"],
+      cat_pantry: ["reis", "rice", "nudeln", "pasta", "dose", "sauce", "gewürz", "spice", "öl", "oil", "konserve"],
+      cat_snacks: ["chips", "süß", "sweet", "schokolade", "chocolate", "keks", "cookie", "snack", "riegel"],
+      cat_frozen: ["tiefkühl", "frozen", "eis", "ice"],
+      cat_drinks: ["getränk", "drink", "wasser", "water", "saft", "juice", "kaffee", "coffee"],
+      cat_household: ["reiniger", "cleaner", "seife", "soap", "papier", "paper", "wasch", "deo", "zahn", "tooth", "haushalt", "putz"],
+      cat_petfood: ["katze", "cat", "tier", "pet", "futter"]
+    };
+
+    function addWordsFromItem(wordSet, item) {
+      [item.de, item.en].forEach(text => {
+        (text || '').toLowerCase().split(/[^a-zäöüß]+/i).forEach(w => {
+          if (w.length >= 3) wordSet.add(w);
+        });
+      });
+    }
+
+    function buildKeywordIndex() {
+      const index = {};
+
+      grocefyCatalog.forEach(cat => {
+        const words = new Set(EXTRA_KEYWORDS[cat.id] || []);
+        cat.items.forEach(item => addWordsFromItem(words, item));
+        index[cat.id] = words;
+      });
+
+      getOrderedCustomCategories().forEach(cat => {
+        const words = new Set();
+        (cat.name || '').toLowerCase().split(/[^a-zäöüß]+/i).forEach(w => {
+          if (w.length >= 3) words.add(w);
+        });
+        index[cat.id] = words;
+      });
+
+      Object.values(customCatalogItems).forEach(it => {
+        if (!index[it.categoryId]) index[it.categoryId] = new Set();
+        addWordsFromItem(index[it.categoryId], { de: it.de, en: it.en });
+      });
+
+      const plain = {};
+      Object.entries(index).forEach(([id, set]) => { plain[id] = Array.from(set); });
+      return plain;
+    }
+
+    function guessCategoryForItem(name) {
+      const index = buildKeywordIndex();
+      const input = (name || '').toLowerCase();
+      const tokens = input.split(/[^a-zäöüß]+/i).filter(w => w.length >= 3);
+      let bestCat = null;
+      let bestScore = 0;
+      Object.entries(index).forEach(([catId, keywords]) => {
+        let score = 0;
+        keywords.forEach(kw => {
+          if (kw.length >= 5 && (input.includes(kw) || kw.includes(input))) score += 0.5;
+          if (tokens.includes(kw)) score += 1;
+        });
+        if (score > bestScore) {
+          bestScore = score;
+          bestCat = catId;
+        }
+      });
+      return bestScore > 0 ? bestCat : 'cat_other';
+    }
+
+    function populateCategorySelect() {
+      const select = document.getElementById('custom-category-select');
+      const prevValue = select.value;
+
+      let options = grocefyCatalog.map(c => `<option value="${c.id}">${c.aisle}</option>`).join('');
+      getOrderedCustomCategories().forEach(cat => {
+        options += `<option value="${cat.id}">${categoryLabel(cat.id)}</option>`;
+      });
+      options += `<option value="cat_other">${categoryLabel('cat_other')}</option>`;
+      options += `<option value="__create_new__">+ Create New Category…</option>`;
+
+      select.innerHTML = options;
+      if (prevValue && select.querySelector(`option[value="${prevValue}"]`)) {
+        select.value = prevValue;
+      }
+    }
+    populateCategorySelect();
+
+    function onCategorySelectChange() {
+      const select = document.getElementById('custom-category-select');
+      const form = document.getElementById('new-category-form');
+      if (select.value === '__create_new__') {
+        form.classList.remove('hidden');
+        document.getElementById('new-category-name').focus();
+      } else {
+        form.classList.add('hidden');
+      }
+    }
+
+    function createNewCategory() {
+      const emoji = document.getElementById('new-category-emoji').value.trim() || '🏷️';
+      const name = document.getElementById('new-category-name').value.trim();
+      if (!name) return;
+
+      const newRef = db.ref('customCategories').push();
+      const newId = newRef.key;
+      const newCat = {
+        name: name,
+        emoji: emoji,
+        createdBy: currentUser ? currentUser.name : null,
+        createdAt: Date.now()
+      };
+
+      customCategories[newId] = newCat; // optimistic local update for instant feedback
+      newRef.set(newCat).catch((err) => {
+        console.warn("Couldn't save new category (will retry on next sync).", err);
+      });
+
+      document.getElementById('new-category-emoji').value = '';
+      document.getElementById('new-category-name').value = '';
+      document.getElementById('new-category-form').classList.add('hidden');
+
+      populateCategorySelect();
+      document.getElementById('custom-category-select').value = newId;
+    }
+
+    function onCustomInputChange() {
+      const val = document.getElementById('custom-input').value.trim();
+      const row = document.getElementById('custom-category-row');
+      if (!val) {
+        row.style.display = 'none';
+        document.getElementById('new-category-form').classList.add('hidden');
+        return;
+      }
+      row.style.display = 'block';
+      document.getElementById('custom-category-select').value = guessCategoryForItem(val);
+      document.getElementById('new-category-form').classList.add('hidden');
+    }
+
+    // Merges the hardcoded catalog with any permanently-saved custom items
+    // and custom categories, plus a virtual "Other" category — custom
+    // categories and "Other" only appear once they actually have an item.
+    function getFullCatalog() {
+      const categories = grocefyCatalog.map(cat => {
+        const extra = Object.values(customCatalogItems)
+          .filter(it => it.categoryId === cat.id)
+          .map(it => ({ de: it.de, en: it.en || '' }));
+        return Object.assign({}, cat, { items: cat.items.concat(extra) });
+      });
+
+      getOrderedCustomCategories().forEach(cat => {
+        const items = Object.values(customCatalogItems)
+          .filter(it => it.categoryId === cat.id)
+          .map(it => ({ de: it.de, en: it.en || '' }));
+        if (items.length > 0) {
+          categories.push({ id: cat.id, aisle: categoryLabel(cat.id), items: items });
+        }
+      });
+
+      const otherExtra = Object.values(customCatalogItems)
+        .filter(it => it.categoryId === 'cat_other')
+        .map(it => ({ de: it.de, en: it.en || '' }));
+
+      if (otherExtra.length > 0) {
+        categories.push({ id: 'cat_other', aisle: categoryLabel('cat_other'), items: otherExtra });
+      }
+      return categories;
+    }
 
     // --- v3: multi-list data model ---
     // Replaces the old single 'activeList' + 'history' paths with one
@@ -530,11 +979,183 @@
       draftListId = null;
     }
 
+    // --- v9: sharing & notifications ---
+    let registeredUsers = {};
+    let myNotifications = {};
+    let lastKnownShoppingItems = {};
+
     function attachRealtimeListeners() {
       db.ref('lists').on('value', (snapshot) => {
         lists = snapshot.val() || {};
+        checkForLiveItemAdditions();
         renderAll();
       });
+      db.ref('customCatalogItems').on('value', (snapshot) => {
+        customCatalogItems = snapshot.val() || {};
+        renderAll();
+      });
+      db.ref('customCategories').on('value', (snapshot) => {
+        customCategories = snapshot.val() || {};
+        populateCategorySelect();
+        renderAll();
+      });
+      db.ref('users').on('value', (snapshot) => {
+        registeredUsers = snapshot.val() || {};
+      });
+      if (currentUser) attachNotificationsListener();
+    }
+
+    function attachNotificationsListener() {
+      if (!currentUser) return;
+      const key = sanitizeKey(currentUser.name);
+      db.ref('notifications/' + key).on('value', (snapshot) => {
+        myNotifications = snapshot.val() || {};
+        renderNotifBadge();
+        if (!document.getElementById('notif-dropdown').classList.contains('hidden')) {
+          renderNotifDropdown();
+        }
+      });
+    }
+
+    function renderNotifBadge() {
+      const badge = document.getElementById('notif-badge');
+      const unread = Object.values(myNotifications).filter(n => !n.read).length;
+      if (unread > 0) {
+        badge.textContent = unread;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    function renderNotifDropdown() {
+      const list = document.getElementById('notif-list');
+      const items = Object.entries(myNotifications).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+      if (items.length === 0) {
+        list.innerHTML = `<p style="font-size:0.8rem; color:var(--subtext);">No notifications yet.</p>`;
+        return;
+      }
+      list.innerHTML = items.map(([id, n]) => `
+        <div style="padding:8px 0; border-top:1px solid #eef7f1; font-size:0.85rem; ${n.read ? '' : 'font-weight:600;'}">
+          <div>${n.message}</div>
+          <div style="font-size:0.72rem; color:var(--subtext); margin-top:2px;">${new Date(n.timestamp).toLocaleString()}</div>
+        </div>
+      `).join('');
+    }
+
+    function toggleNotifDropdown() {
+      document.getElementById('user-dropdown').classList.add('hidden');
+      const dropdown = document.getElementById('notif-dropdown');
+      if (dropdown.classList.contains('hidden')) {
+        renderNotifDropdown();
+        dropdown.classList.remove('hidden');
+        if (currentUser) {
+          const key = sanitizeKey(currentUser.name);
+          Object.keys(myNotifications).forEach(id => {
+            if (!myNotifications[id].read) {
+              db.ref(`notifications/${key}/${id}/read`).set(true);
+            }
+          });
+        }
+      } else {
+        dropdown.classList.add('hidden');
+      }
+    }
+
+    function showToast(message) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('toast-fade');
+        setTimeout(() => toast.remove(), 400);
+      }, 3500);
+    }
+
+    // Detects items added by someone else while you're actively viewing
+    // this list in Shopping Mode, and surfaces a quick toast for it.
+    function checkForLiveItemAdditions() {
+      if (!openListId || currentViewName !== 'shoppingMode' || !currentUser) return;
+      const list = lists[openListId];
+      if (!list) return;
+      const currentItems = list.items || {};
+      Object.keys(currentItems).forEach(key => {
+        if (!lastKnownShoppingItems[key]) {
+          const item = currentItems[key];
+          if (item.addedBy && item.addedBy !== currentUser.name) {
+            showToast(`🔔 ${item.addedBy} added ${item.name}`);
+          }
+        }
+      });
+      lastKnownShoppingItems = Object.assign({}, currentItems);
+    }
+
+    // --- Share modal ---
+    let shareModalListId = null;
+    let shareModalSelected = new Set();
+
+    function openShareModal(listId) {
+      shareModalListId = listId;
+      const list = lists[listId];
+      if (!list) return;
+      shareModalSelected = new Set(list.sharedWith || []);
+      const ownerIndexMap = getOwnerIndexMap();
+      document.getElementById('share-modal-list-title').innerText = displayTitleFor(Object.assign({ id: listId }, list), ownerIndexMap);
+
+      const allNames = Object.values(registeredUsers).map(u => u.name).filter(n => n && n !== currentUser.name);
+      const uniqueNames = Array.from(new Set(allNames));
+      const container = document.getElementById('share-user-list');
+      if (uniqueNames.length === 0) {
+        container.innerHTML = `<p style="font-size:0.85rem; color:var(--subtext); text-align:center;">No other users yet.</p>`;
+      } else {
+        container.innerHTML = uniqueNames.map(name => `
+          <label class="share-user-row">
+            <input type="checkbox" ${shareModalSelected.has(name) ? 'checked' : ''} onchange="toggleShareUser('${name}', this.checked)">
+            <span>${name}</span>
+          </label>
+        `).join('');
+      }
+      document.getElementById('share-modal-overlay').classList.remove('hidden');
+    }
+
+    function toggleShareUser(name, checked) {
+      if (checked) shareModalSelected.add(name);
+      else shareModalSelected.delete(name);
+    }
+
+    function closeShareModal() {
+      document.getElementById('share-modal-overlay').classList.add('hidden');
+      shareModalListId = null;
+    }
+
+    function confirmShare() {
+      if (!shareModalListId) return;
+      const listId = shareModalListId;
+      const list = lists[listId];
+      const previousShared = new Set(list ? (list.sharedWith || []) : []);
+      const newShared = Array.from(shareModalSelected);
+      const ownerIndexMap = getOwnerIndexMap();
+      const title = displayTitleFor(Object.assign({ id: listId }, list), ownerIndexMap);
+
+      db.ref(`lists/${listId}/sharedWith`).set(newShared);
+
+      newShared.forEach(name => {
+        if (!previousShared.has(name)) {
+          const key = sanitizeKey(name);
+          db.ref('notifications/' + key).push({
+            type: 'share',
+            message: `${currentUser.name} shared "${title}" with you`,
+            listId: listId,
+            fromUser: currentUser.name,
+            timestamp: Date.now(),
+            read: false
+          });
+        }
+      });
+
+      closeShareModal();
     }
 
     // Silent anonymous sign-in: gives every device a token so the database
@@ -599,7 +1220,7 @@
       const draft = (draftListId && lists[draftListId]) ? lists[draftListId] : null;
       const draftItems = draft ? (draft.items || {}) : {};
 
-      grocefyCatalog.forEach((cat) => {
+      getFullCatalog().forEach((cat) => {
         const card = document.createElement('div');
         card.id = cat.id;
         const isCollapsed = !!collapsedState[cat.id];
@@ -610,7 +1231,8 @@
           const isAdded = !!draftItems[sanitizeKey(item.de)];
           itemsHTML += `
             <div class="item-row">
-              <div class="item-info">
+              <span class="item-icon">${getItemIcon(item.de, cat.aisle)}</span>
+              <div class="item-info" style="flex:1;">
                 <span class="item-de">${item.de}</span>
                 <span class="item-en">${item.en}</span>
               </div>
@@ -632,17 +1254,122 @@
       });
     }
 
+    // --- v8: quantity & unit selector ---
+    const UNIT_OPTIONS = ["pcs", "g", "kg", "ml", "l", "pack"];
+    const STEP_BY_UNIT = { pcs: 1, pack: 1, kg: 0.5, l: 0.5, g: 50, ml: 50 };
+    const DEFAULT_UNIT_BY_CATEGORY_ID = {
+      cat_produce: "pcs", cat_bakery: "pcs", cat_dairy: "pack", cat_meat: "kg",
+      cat_pantry: "pack", cat_snacks: "pack", cat_frozen: "pack", cat_drinks: "l",
+      cat_household: "pack", cat_petfood: "pack", cat_other: "pcs"
+    };
+
+    function guessDefaultUnitForAisle(aisle) {
+      const builtIn = grocefyCatalog.find(c => c.aisle === aisle);
+      if (builtIn) return DEFAULT_UNIT_BY_CATEGORY_ID[builtIn.id] || 'pcs';
+      return 'pcs';
+    }
+
+    let pendingItem = null; // { name, en, aisle, mode: 'new'|'newCustom'|'edit', categoryId?, editKey? }
+    let selectedUnit = 'pcs';
+
+    function openQtyModal(opts) {
+      pendingItem = opts;
+      selectedUnit = opts.unit || opts.defaultUnit || 'pcs';
+      document.getElementById('qty-value-input').value = opts.qty || 1;
+      document.getElementById('qty-modal-item-name').innerText = `${getItemIcon(opts.name, opts.aisle)}  ${opts.name}`;
+      document.getElementById('qty-modal-confirm-btn').innerText = opts.mode === 'edit' ? 'Save' : 'Add to List';
+      renderUnitChips();
+      document.getElementById('qty-modal-overlay').classList.remove('hidden');
+    }
+
+    function closeQtyModal() {
+      document.getElementById('qty-modal-overlay').classList.add('hidden');
+      pendingItem = null;
+    }
+
+    function renderUnitChips() {
+      const row = document.getElementById('unit-chip-row');
+      row.innerHTML = UNIT_OPTIONS.map(u =>
+        `<button class="unit-chip${u === selectedUnit ? ' selected' : ''}" onclick="selectUnit('${u}')">${u}</button>`
+      ).join('');
+    }
+
+    function selectUnit(u) {
+      selectedUnit = u;
+      renderUnitChips();
+    }
+
+    function adjustQty(direction) {
+      const input = document.getElementById('qty-value-input');
+      const step = STEP_BY_UNIT[selectedUnit] || 1;
+      let val = parseFloat(input.value) || 0;
+      val = Math.max(step, Math.round((val + direction * step) * 100) / 100);
+      input.value = val;
+    }
+
+    function confirmAddWithQty() {
+      if (!pendingItem) return;
+      const qty = parseFloat(document.getElementById('qty-value-input').value) || 1;
+      const unit = selectedUnit;
+      // Capture everything we need now — closeQtyModal() (called below, before
+      // the async write below resolves) sets pendingItem back to null, so the
+      // .then() callback must not depend on pendingItem still existing.
+      const itemName = pendingItem.name;
+      const itemEn = pendingItem.en;
+      const itemAisle = pendingItem.aisle;
+      const mode = pendingItem.mode;
+      const categoryId = pendingItem.categoryId;
+      const key = sanitizeKey(itemName);
+
+      if (mode === 'edit') {
+        if (draftListId) {
+          db.ref(`lists/${draftListId}/items/${key}`).update({ qty: qty, unit: unit });
+        }
+        closeQtyModal();
+        return;
+      }
+
+      if (mode === 'newCustom') {
+        db.ref('customCatalogItems').push({
+          de: itemName,
+          en: itemEn || '',
+          categoryId: categoryId,
+          addedBy: currentUser ? currentUser.name : null,
+          addedAt: Date.now()
+        });
+      }
+
+      ensureDraftResolved().then((listId) => {
+        db.ref(`lists/${listId}/items/${key}`).set({
+          name: itemName, en: itemEn || '', aisle: itemAisle,
+          checked: false, qty: qty, unit: unit,
+          addedBy: currentUser ? currentUser.name : null
+        });
+      });
+
+      closeQtyModal();
+    }
+
+    function openEditQtyModal(key) {
+      const draft = (draftListId && lists[draftListId]) ? lists[draftListId] : null;
+      if (!draft || !draft.items || !draft.items[key]) return;
+      const item = draft.items[key];
+      openQtyModal({
+        name: item.name, en: item.en, aisle: item.aisle,
+        qty: item.qty || 1, unit: item.unit || guessDefaultUnitForAisle(item.aisle),
+        mode: 'edit'
+      });
+    }
+
     function toggleItem(name, aisle, enTranslation) {
       const key = sanitizeKey(name);
-      ensureDraftResolved().then((listId) => {
-        const draft = lists[listId] || { items: {} };
-        const items = draft.items || {};
-        if (items[key]) {
-          db.ref(`lists/${listId}/items/${key}`).remove();
-        } else {
-          db.ref(`lists/${listId}/items/${key}`).set({ name: name, en: enTranslation || '', aisle: aisle, checked: false });
-        }
-      });
+      const draft = (draftListId && lists[draftListId]) ? lists[draftListId] : null;
+      const draftItems = draft ? (draft.items || {}) : {};
+      if (draftItems[key]) {
+        removeDraftItem(key);
+      } else {
+        openQtyModal({ name: name, en: enTranslation, aisle: aisle, defaultUnit: guessDefaultUnitForAisle(aisle), mode: 'new' });
+      }
     }
 
     function removeDraftItem(key) {
@@ -655,10 +1382,29 @@
       const val = input.value.trim();
       if (!val) return;
       const key = sanitizeKey(val);
-      ensureDraftResolved().then((listId) => {
-        db.ref(`lists/${listId}/items/${key}`).set({ name: val, en: '', aisle: "5. 🥫 Pantry & Canned (Vorrat & Haltbares)", checked: false });
+      let categoryId = document.getElementById('custom-category-select').value || 'cat_other';
+      if (categoryId === '__create_new__') categoryId = 'cat_other'; // safety net if not resolved via the mini-form
+
+      let existing = null;
+      getFullCatalog().forEach(cat => {
+        cat.items.forEach(it => {
+          if (sanitizeKey(it.de) === key) existing = { de: it.de, en: it.en, aisle: cat.aisle };
+        });
       });
+
       input.value = '';
+      document.getElementById('custom-category-row').style.display = 'none';
+
+      if (existing) {
+        // Already in the catalog (built-in or previously added by anyone) — just add it, don't duplicate the catalog entry.
+        openQtyModal({ name: existing.de, en: existing.en, aisle: existing.aisle, defaultUnit: guessDefaultUnitForAisle(existing.aisle), mode: 'new' });
+      } else {
+        openQtyModal({
+          name: val, en: '', aisle: categoryLabel(categoryId),
+          defaultUnit: DEFAULT_UNIT_BY_CATEGORY_ID[categoryId] || 'pcs',
+          mode: 'newCustom', categoryId: categoryId
+        });
+      }
     }
 
     function renderCurrentListView() {
@@ -679,12 +1425,13 @@
       if (mainBtn) mainBtn.disabled = false;
 
       container.innerHTML = items.map(([key, item]) => `
-        <div class="check-item">
+        <div class="check-item" style="cursor:pointer;" onclick="openEditQtyModal('${key}')">
+          <span class="item-icon">${getItemIcon(item.name, item.aisle)}</span>
           <div style="flex:1;">
-            <div style="font-weight: 600;">${item.name}${item.en ? ` <span style="font-weight:normal; color:var(--subtext); font-size:0.85rem;">(${item.en})</span>` : ''}</div>
+            <div style="font-weight: 600;">${item.name}<span class="qty-badge">${item.qty || 1} ${item.unit || 'pcs'}</span>${item.en ? ` <span style="font-weight:normal; color:var(--subtext); font-size:0.85rem;">(${item.en})</span>` : ''}</div>
             <div style="font-size:0.75rem; color: var(--subtext);">${item.aisle}</div>
           </div>
-          <button class="btn-add added" onclick="removeDraftItem('${key}')">✕ Remove</button>
+          <button class="btn-add added" onclick="event.stopPropagation(); removeDraftItem('${key}')">✕ Remove</button>
         </div>
       `).join('');
     }
@@ -745,15 +1492,20 @@
 
       container.innerHTML = activeLists.map((l) => {
         const displayTitle = displayTitleFor(l, ownerIndexMap);
-        const canDelete = l.ownerName === currentUser.name;
+        const canManage = l.ownerName === currentUser.name;
+        const sharedWith = l.sharedWith || [];
         return `
           <div class="list-card" onclick="openListForShopping('${l.id}')">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
               <div>
                 <div class="list-card-title">${displayTitle}</div>
                 <div class="list-card-meta">📅 ${new Date(l.createdAt).toLocaleString()} · by ${l.ownerName}</div>
+                ${sharedWith.length > 0 ? `<div class="list-card-shared-meta">🔗 Shared with ${sharedWith.join(', ')}</div>` : ''}
               </div>
-              ${canDelete ? `<button class="list-card-delete" onclick="event.stopPropagation(); deleteList('${l.id}')">✕</button>` : ''}
+              <div class="list-card-actions">
+                ${canManage ? `<button class="list-card-share" onclick="event.stopPropagation(); openShareModal('${l.id}')">🔗 Share</button>` : ''}
+                ${canManage ? `<button class="list-card-delete" onclick="event.stopPropagation(); deleteList('${l.id}')">✕</button>` : ''}
+              </div>
             </div>
           </div>
         `;
@@ -767,6 +1519,8 @@
 
     function openListForShopping(id) {
       openListId = id;
+      const list = lists[id];
+      lastKnownShoppingItems = list ? Object.assign({}, list.items || {}) : {};
       switchView('shoppingMode');
     }
 
@@ -789,8 +1543,9 @@
       container.innerHTML = itemsArr.map(([key, item]) => `
         <div class="check-item ${item.checked ? 'done' : ''}">
           <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleShoppingCheck('${key}')">
+          <span class="item-icon">${getItemIcon(item.name, item.aisle)}</span>
           <div style="flex:1;">
-            <div style="font-weight: 600;">${item.name}${item.en ? ` <span style="font-weight:normal; color:var(--subtext); font-size:0.85rem;">(${item.en})</span>` : ''}</div>
+            <div style="font-weight: 600;">${item.name}<span class="qty-badge">${item.qty || 1} ${item.unit || 'pcs'}</span>${item.en ? ` <span style="font-weight:normal; color:var(--subtext); font-size:0.85rem;">(${item.en})</span>` : ''}</div>
             <div style="font-size:0.75rem; color: var(--subtext);">${item.aisle}</div>
           </div>
         </div>
@@ -817,15 +1572,21 @@
       const ownerIndexMap = getOwnerIndexMap();
       const completedLists = getVisibleLists('completed').sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
 
+      document.getElementById('history-tab-count').innerText = completedLists.length;
+
       if (completedLists.length === 0) {
         container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">No past shopping trips logged yet.</p>`;
       } else {
         container.innerHTML = completedLists.map(l => {
           const title = displayTitleFor(l, ownerIndexMap);
           const itemNames = Object.values(l.items || {}).map(i => i.name);
+          const canDelete = l.ownerName === currentUser.name;
           return `
             <div class="history-card">
-              <div class="history-date">📅 ${new Date(l.completedAt || l.createdAt).toLocaleString()} \u2014 ${title}</div>
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div class="history-date">📅 ${new Date(l.completedAt || l.createdAt).toLocaleString()} \u2014 ${title}</div>
+                ${canDelete ? `<button class="list-card-delete" onclick="deleteList('${l.id}')">✕</button>` : ''}
+              </div>
               <div style="font-size: 0.9rem; color: var(--text);">${itemNames.join(', ')}</div>
             </div>
           `;
@@ -864,6 +1625,7 @@
       else if (currentViewName === 'history') renderHistory();
 
       document.getElementById('mylists-tab-count').innerText = getVisibleLists('active').length;
+      document.getElementById('history-tab-count').innerText = getVisibleLists('completed').length;
       updateBarLabel(currentViewName);
     }
 
