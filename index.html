@@ -1,3 +1,21 @@
+<!--
+  Grocefy — v3 (Multi-List Data Model + My Lists)
+  Generated: 2026-08-14
+  Includes: v1 (security rules prep, key sanitization, per-item writes)
+          + v2 (name/avatar login, remembered per device)
+          + v2.1 (icon avatars, header shows icon+name, profile dropdown)
+          + v3 (replaces single activeList+history with a 'lists' node;
+                Catalog builds a draft -> Save -> shows in My Lists ->
+                open to shop -> Finalize -> moves to History;
+                My Lists/History scoped to lists you own or that are
+                shared with you; delete-a-saved-list added)
+
+  ACTION NEEDED IN FIREBASE CONSOLE BEFORE USING THIS VERSION:
+  Go to Realtime Database > Data tab and delete the old top-level
+  'activeList' and 'history' nodes (right-click / trash icon on each).
+  No rules changes needed — the existing "auth != null" rule already
+  covers the new 'lists' node.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -72,19 +90,84 @@
 
     .history-card { background: white; padding: 14px; border-radius: 10px; margin-bottom: 10px; border: 1px solid var(--border); }
     .history-date { font-weight: bold; margin-bottom: 6px; color: var(--primary-accent); font-size: 0.85rem; }
+
+    /* --- v2: Login / user identity --- */
+    .login-overlay { position: fixed; inset: 0; background: var(--mint-bg); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .login-overlay.hidden { display: none; }
+    .login-card { position: relative; background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 28px 24px; max-width: 380px; width: 100%; box-shadow: 0 8px 24px rgba(27, 67, 50, 0.12); text-align: center; }
+    .login-cancel { position: absolute; top: 12px; right: 12px; background: none; border: none; font-size: 1.1rem; color: var(--subtext); cursor: pointer; line-height: 1; }
+    #login-name-input { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.95rem; background: white; text-align: center; }
+    #login-name-input:focus { outline: none; border-color: var(--primary-accent); }
+    .avatar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .avatar-option { display: flex; align-items: center; justify-content: center; padding: 8px 0; border-radius: 10px; border: 1.5px solid var(--border); background: var(--mint-bg); cursor: pointer; transition: all 0.15s; }
+    .avatar-option.selected { border-color: var(--primary-accent); background: var(--light-green); box-shadow: 0 0 0 2px var(--primary-accent) inset; }
+
+    .header-user-badge { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.4); border-radius: 999px; padding: 4px 12px 4px 4px; cursor: pointer; max-width: 170px; }
+    .header-user-name { color: white; font-size: 0.85rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .user-dropdown { position: absolute; top: 100%; right: 14px; margin-top: 8px; z-index: 150; background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 24px rgba(27,67,50,0.15); padding: 16px; width: 260px; }
+    .user-dropdown.hidden { display: none; }
+    .user-dropdown-header { display: flex; align-items: center; gap: 10px; }
+    .user-dropdown-divider { border-top: 1px solid var(--border); margin: 12px 0; }
+    .dropdown-switch-btn { width: 100%; background: var(--mint-bg); color: var(--primary-accent); border: 1.5px solid var(--border); padding: 8px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer; margin-top: 4px; }
+
+    /* --- v3: multi-list data model --- */
+    .back-link { background: none; border: none; color: var(--subtext); font-size: 0.85rem; font-weight: 700; cursor: pointer; padding: 0; margin-bottom: 14px; display: inline-flex; align-items: center; gap: 4px; }
+    #current-list-title-input { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.95rem; background: white; margin-bottom: 14px; }
+    #current-list-title-input:focus { outline: none; border-color: var(--primary-accent); }
+    .list-card { background: white; padding: 14px 16px; border-radius: 10px; margin-bottom: 10px; border: 1px solid var(--border); cursor: pointer; transition: box-shadow 0.15s; }
+    .list-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .list-card-title { font-weight: 700; color: var(--primary); font-size: 0.98rem; }
+    .list-card-meta { font-size: 0.78rem; color: var(--subtext); margin-top: 2px; }
+    .list-card-delete { background: none; border: none; color: #b45309; font-size: 1rem; cursor: pointer; padding: 4px 6px; line-height: 1; }
   </style>
 </head>
 <body>
 
+  <!-- LOGIN / SWITCH USER OVERLAY -->
+  <div id="login-overlay" class="login-overlay">
+    <div class="login-card">
+      <button id="login-cancel" class="login-cancel" onclick="closeLoginOverlay()" style="display:none;">✕</button>
+      <h1 style="font-size:1.4rem;font-weight:800;color:var(--primary);margin-bottom:4px;">🌱 Grocefy</h1>
+      <p id="login-subtitle" style="font-size:0.85rem;color:var(--subtext);margin-bottom:18px;">Pick a name to get started</p>
+
+      <input type="text" id="login-name-input" placeholder="Your name" maxlength="20" oninput="checkNameDuplicate()">
+      <p id="login-name-warning" style="font-size:0.78rem;color:#b45309;margin-top:6px;min-height:14px;"></p>
+
+      <p style="font-size:0.8rem;font-weight:700;color:var(--subtext);margin:14px 0 8px;">Choose an avatar</p>
+      <div id="avatar-grid" class="avatar-grid"></div>
+
+      <button id="login-submit-btn" class="btn-primary" style="width:100%;margin-top:18px;" onclick="submitLogin()">Login</button>
+    </div>
+  </div>
+
   <header>
     <h1>🌱 Grocefy</h1>
     <p>Live Sync Grocery List</p>
+    <div id="header-user-badge" class="header-user-badge" onclick="toggleUserDropdown()">
+      <span id="header-avatar-icon"></span>
+      <span id="header-user-name" class="header-user-name"></span>
+    </div>
+    <div id="user-dropdown" class="user-dropdown hidden">
+      <div class="user-dropdown-header">
+        <span id="dropdown-avatar-icon"></span>
+        <div>
+          <div id="dropdown-user-name" style="font-weight:700;"></div>
+          <div id="dropdown-last-login" style="font-size:0.75rem; color:var(--subtext);"></div>
+        </div>
+      </div>
+      <div class="user-dropdown-divider"></div>
+      <div style="font-size:0.8rem; font-weight:700; color:var(--subtext); margin-bottom:6px;">Your recent shopping trips</div>
+      <div id="dropdown-order-history"></div>
+      <div class="user-dropdown-divider"></div>
+      <button class="dropdown-switch-btn" onclick="openLoginOverlay(true)">Switch User</button>
+    </div>
   </header>
 
   <div class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab('catalog')">Catalog</button>
-    <button class="tab-btn" onclick="switchTab('shopping')">Shopping List (<span id="cart-count">0</span>)</button>
-    <button class="tab-btn" onclick="switchTab('history')">History</button>
+    <button class="tab-btn active" onclick="switchView('catalog')">Catalog</button>
+    <button class="tab-btn" onclick="switchView('mylists')">My Lists (<span id="mylists-tab-count">0</span>)</button>
+    <button class="tab-btn" onclick="switchView('history')">History</button>
   </div>
 
   <!-- CATALOG VIEW -->
@@ -96,10 +179,23 @@
     <div id="catalog-container"></div>
   </div>
 
-  <!-- SHOPPING LIST VIEW -->
-  <div id="shopping-view" class="view">
-    <h2 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--subtext);">Aisle Order (Store Progression)</h2>
-    <div id="active-list-container"></div>
+  <!-- CURRENT LIST (DRAFT) VIEW -->
+  <div id="current-list-view" class="view">
+    <button class="back-link" onclick="switchView('catalog')">← Back to Catalog</button>
+    <input type="text" id="current-list-title-input" placeholder="List title (optional)">
+    <div id="current-list-container"></div>
+  </div>
+
+  <!-- MY LISTS VIEW -->
+  <div id="mylists-view" class="view">
+    <div id="mylists-container"></div>
+  </div>
+
+  <!-- SHOPPING MODE VIEW -->
+  <div id="shopping-mode-view" class="view">
+    <button class="back-link" onclick="switchView('mylists')">← Back to My Lists</button>
+    <h2 id="shopping-mode-title" style="font-size: 1.05rem; margin-bottom: 12px; color: var(--primary); font-weight: 700;"></h2>
+    <div id="shopping-mode-container"></div>
   </div>
 
   <!-- HISTORY VIEW -->
@@ -111,7 +207,7 @@
     <div>
       <strong id="bar-count" style="color: var(--primary);">0 Items selected</strong>
     </div>
-    <button id="main-cta" class="btn-primary" onclick="switchTab('shopping')">Go to Shopping List ➔</button>
+    <button id="main-cta" class="btn-primary" onclick="switchView('currentList')">Go to Shopping List ➔</button>
   </div>
 
   <script>
@@ -127,6 +223,189 @@
     } catch(e) {
       console.warn("Firebase initialization warning.", e);
     }
+
+    // Firebase Realtime Database keys can't contain . # $ [ ] /
+    // A few German item names (e.g. "Karotten / Möhren") contain a slash,
+    // which used to make writes fail silently. This makes a safe key while
+    // the real display name stays intact inside the stored item object.
+    function sanitizeKey(str) {
+      return str.replace(/[.#$\[\]\/]/g, '_');
+    }
+
+    // --- v2: simple name + avatar identity (no password) ---
+    const AVATAR_COLORS = ["#E07A5F","#3D405B","#81B29A","#F2CC8F","#6C5B7B","#C06C84","#355C7D","#F67280","#1B998B","#E8871E","#457B9D","#BC6C25"];
+    let currentUser = null; // { name, avatar, lastLoginDisplay }
+    let selectedAvatar = null;
+
+    function avatarIconSVG(color, size) {
+      size = size || 28;
+      const iconSize = Math.round(size * 0.57);
+      return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:${color};flex-shrink:0;">
+        <svg viewBox="0 0 24 24" width="${iconSize}" height="${iconSize}" fill="white"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.42 3.58-8 8-8s8 3.58 8 8"/></svg>
+      </span>`;
+    }
+
+    function renderAvatarGrid() {
+      const grid = document.getElementById('avatar-grid');
+      grid.innerHTML = AVATAR_COLORS.map(c =>
+        `<button class="avatar-option${c === selectedAvatar ? ' selected' : ''}" onclick="selectAvatar('${c}')">${avatarIconSVG(c, 32)}</button>`
+      ).join('');
+    }
+
+    function selectAvatar(c) {
+      selectedAvatar = c;
+      renderAvatarGrid();
+    }
+
+    function checkNameDuplicate() {
+      const name = document.getElementById('login-name-input').value.trim();
+      const warning = document.getElementById('login-name-warning');
+      if (!name || !db) { warning.textContent = ''; return; }
+      db.ref('users').once('value').then(snapshot => {
+        const users = snapshot.val() || {};
+        const takenByOther = Object.values(users).some(u =>
+          u.name && u.name.toLowerCase() === name.toLowerCase() &&
+          !(currentUser && currentUser.name.toLowerCase() === name.toLowerCase())
+        );
+        warning.textContent = takenByOther ? `"${name}" is already in use \u2014 you can still continue if that's you.` : '';
+      }).catch(() => {});
+    }
+
+    function openLoginOverlay(isSwitch) {
+      document.getElementById('user-dropdown').classList.add('hidden');
+      const overlay = document.getElementById('login-overlay');
+      const cancelBtn = document.getElementById('login-cancel');
+      const subtitle = document.getElementById('login-subtitle');
+      document.getElementById('login-name-warning').textContent = '';
+      if (isSwitch && currentUser) {
+        document.getElementById('login-name-input').value = currentUser.name;
+        selectedAvatar = currentUser.avatar;
+        subtitle.textContent = 'Switch user';
+        cancelBtn.style.display = 'block';
+      } else {
+        document.getElementById('login-name-input').value = '';
+        selectedAvatar = null;
+        subtitle.textContent = 'Pick a name to get started';
+        cancelBtn.style.display = 'none';
+      }
+      renderAvatarGrid();
+      overlay.classList.remove('hidden');
+    }
+
+    function closeLoginOverlay() {
+      document.getElementById('login-overlay').classList.add('hidden');
+    }
+
+    function updateHeaderBadge() {
+      if (!currentUser) return;
+      document.getElementById('header-avatar-icon').innerHTML = avatarIconSVG(currentUser.avatar, 28);
+      document.getElementById('header-user-name').textContent = currentUser.name;
+    }
+
+    function renderUserDropdown() {
+      if (!currentUser) return;
+      document.getElementById('dropdown-avatar-icon').innerHTML = avatarIconSVG(currentUser.avatar, 40);
+      document.getElementById('dropdown-user-name').textContent = currentUser.name;
+      document.getElementById('dropdown-last-login').textContent = currentUser.lastLoginDisplay
+        ? ('Last login: ' + currentUser.lastLoginDisplay)
+        : 'First login';
+
+      const myTrips = getVisibleLists('completed')
+        .filter(l => l.ownerName === currentUser.name)
+        .sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0))
+        .slice(0, 5);
+
+      const container = document.getElementById('dropdown-order-history');
+      if (myTrips.length === 0) {
+        container.innerHTML = `<p style="font-size:0.8rem; color:var(--subtext);">No trips yet.</p>`;
+      } else {
+        container.innerHTML = myTrips.map(t => {
+          const itemCount = Object.keys(t.items || {}).length;
+          return `
+            <div style="padding:6px 0; border-top:1px solid #eef7f1; font-size:0.82rem;">
+              <div style="font-weight:600;">${new Date(t.completedAt || t.createdAt).toLocaleString()}</div>
+              <div style="color:var(--subtext);">${itemCount} item${itemCount === 1 ? '' : 's'}</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function toggleUserDropdown() {
+      const dropdown = document.getElementById('user-dropdown');
+      if (dropdown.classList.contains('hidden')) {
+        renderUserDropdown();
+        dropdown.classList.remove('hidden');
+      } else {
+        dropdown.classList.add('hidden');
+      }
+    }
+
+    document.addEventListener('click', (e) => {
+      const dropdown = document.getElementById('user-dropdown');
+      const badge = document.getElementById('header-user-badge');
+      if (!dropdown || !badge || dropdown.classList.contains('hidden')) return;
+      if (!dropdown.contains(e.target) && !badge.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+
+    // Reads the previous lastLogin (to display), then writes a fresh one.
+    // Used both on first login and on every return visit.
+    function recordLogin(name, avatar) {
+      if (!db) { updateHeaderBadge(); return; }
+      const key = sanitizeKey(name);
+      db.ref('users/' + key).once('value').then(snapshot => {
+        const existing = snapshot.val();
+        currentUser.lastLoginDisplay = existing && existing.lastLogin
+          ? new Date(existing.lastLogin).toLocaleString()
+          : null;
+        updateHeaderBadge();
+        return db.ref('users/' + key).update({
+          name: name,
+          avatar: avatar,
+          lastLogin: Date.now()
+        });
+      }).catch((err) => {
+        console.warn("Couldn't read/update login record (app still usable locally).", err);
+        updateHeaderBadge();
+      });
+    }
+
+    function submitLogin() {
+      const name = document.getElementById('login-name-input').value.trim();
+      if (!name) { document.getElementById('login-name-warning').textContent = 'Please enter a name.'; return; }
+      if (!selectedAvatar) { document.getElementById('login-name-warning').textContent = 'Please pick an avatar.'; return; }
+
+      currentUser = { name: name, avatar: selectedAvatar };
+      try {
+        localStorage.setItem('grocefyUser', JSON.stringify(currentUser));
+      } catch(e) {
+        console.warn("Couldn't save identity locally.", e);
+      }
+
+      recordLogin(name, selectedAvatar);
+      updateHeaderBadge();
+      closeLoginOverlay();
+    }
+
+    // On load: skip straight into the app if this device already has a
+    // saved identity, otherwise show the picker before anything else.
+    (function initUser() {
+      try {
+        const saved = localStorage.getItem('grocefyUser');
+        if (saved) {
+          currentUser = JSON.parse(saved);
+          updateHeaderBadge();
+          recordLogin(currentUser.name, currentUser.avatar);
+          closeLoginOverlay();
+        } else {
+          openLoginOverlay(false);
+        }
+      } catch(e) {
+        openLoginOverlay(false);
+      }
+    })();
 
     const grocefyCatalog = [
       {
@@ -235,25 +514,31 @@
       }
     ];
 
-    let activeItems = {};
-    let historyLogs = [];
+    // --- v3: multi-list data model ---
+    // Replaces the old single 'activeList' + 'history' paths with one
+    // 'lists' node. Each list has: title, ownerName, sharedWith[], status
+    // ('draft' | 'active' | 'completed'), createdAt, completedAt, items.
+    let lists = {};
+    let draftListId = null;   // the list currently being built from the Catalog
+    let openListId = null;    // the list currently open in Shopping Mode
+    let currentViewName = 'catalog';
     let collapsedState = {};
 
+    try {
+      draftListId = localStorage.getItem('grocefyDraftListId') || null;
+    } catch(e) {
+      draftListId = null;
+    }
+
     function attachRealtimeListeners() {
-      db.ref('activeList').on('value', (snapshot) => {
-        activeItems = snapshot.val() || {};
+      db.ref('lists').on('value', (snapshot) => {
+        lists = snapshot.val() || {};
         renderAll();
-      });
-      db.ref('history').on('value', (snapshot) => {
-        const data = snapshot.val();
-        historyLogs = data ? Object.values(data) : [];
-        renderHistory();
       });
     }
 
     // Silent anonymous sign-in: gives every device a token so the database
     // rules can require "must be signed in" instead of being wide open.
-    // No UI shown to the user for this yet (that comes in v2's name picker).
     if(db) {
       firebase.auth().onAuthStateChanged((user) => {
         if (user) {
@@ -273,19 +558,56 @@
       }
     }
 
+    // Returns (a promise resolving to) the id of the draft list to write
+    // into, creating a fresh one if there isn't a valid one yet.
+    function ensureDraftResolved() {
+      if (draftListId && lists[draftListId] && lists[draftListId].status === 'draft') {
+        return Promise.resolve(draftListId);
+      }
+      if (draftListId) {
+        return db.ref('lists/' + draftListId).once('value').then(snap => {
+          if (snap.exists() && snap.val().status === 'draft') return draftListId;
+          return createNewDraft();
+        });
+      }
+      return createNewDraft();
+    }
+
+    function createNewDraft() {
+      const newRef = db.ref('lists').push();
+      const newId = newRef.key;
+      const newList = {
+        title: null,
+        ownerName: currentUser.name,
+        sharedWith: [],
+        status: 'draft',
+        createdAt: Date.now(),
+        completedAt: null,
+        items: {}
+      };
+      return newRef.set(newList).then(() => {
+        draftListId = newId;
+        try { localStorage.setItem('grocefyDraftListId', newId); } catch(e) {}
+        return newId;
+      });
+    }
+
     function renderCatalog() {
       const container = document.getElementById('catalog-container');
       container.innerHTML = '';
+
+      const draft = (draftListId && lists[draftListId]) ? lists[draftListId] : null;
+      const draftItems = draft ? (draft.items || {}) : {};
 
       grocefyCatalog.forEach((cat) => {
         const card = document.createElement('div');
         card.id = cat.id;
         const isCollapsed = !!collapsedState[cat.id];
         card.className = `category-card ${isCollapsed ? 'collapsed' : ''}`;
-        
+
         let itemsHTML = '';
         cat.items.forEach(item => {
-          const isAdded = !!activeItems[sanitizeKey(item.de)];
+          const isAdded = !!draftItems[sanitizeKey(item.de)];
           itemsHTML += `
             <div class="item-row">
               <div class="item-info">
@@ -310,159 +632,281 @@
       });
     }
 
-    // Firebase Realtime Database keys can't contain . # $ [ ] /
-    // A few German item names (e.g. "Karotten / Möhren") contain a slash,
-    // which used to make writes fail silently. This makes a safe key while
-    // the real display name stays intact inside the stored item object.
-    function sanitizeKey(str) {
-      return str.replace(/[.#$\[\]\/]/g, '_');
-    }
-
-    function addActiveItem(key, itemData) {
-      activeItems[key] = itemData;
-      if(db) {
-        db.ref('activeList/' + key).set(itemData);
-      } else {
-        renderAll();
-      }
-    }
-
-    function removeActiveItem(key) {
-      delete activeItems[key];
-      if(db) {
-        db.ref('activeList/' + key).remove();
-      } else {
-        renderAll();
-      }
-    }
-
     function toggleItem(name, aisle, enTranslation) {
       const key = sanitizeKey(name);
-      if(activeItems[key]) {
-        removeActiveItem(key);
-      } else {
-        addActiveItem(key, { name: name, en: enTranslation || '', aisle: aisle, checked: false });
-      }
+      ensureDraftResolved().then((listId) => {
+        const draft = lists[listId] || { items: {} };
+        const items = draft.items || {};
+        if (items[key]) {
+          db.ref(`lists/${listId}/items/${key}`).remove();
+        } else {
+          db.ref(`lists/${listId}/items/${key}`).set({ name: name, en: enTranslation || '', aisle: aisle, checked: false });
+        }
+      });
     }
 
-    function toggleCheck(name) {
-      const key = sanitizeKey(name);
-      if(activeItems[key]) {
-        const newChecked = !activeItems[key].checked;
-        activeItems[key].checked = newChecked;
-        if(db) {
-          db.ref('activeList/' + key + '/checked').set(newChecked);
-        } else {
-          renderAll();
-        }
-      }
+    function removeDraftItem(key) {
+      if (!draftListId) return;
+      db.ref(`lists/${draftListId}/items/${key}`).remove();
     }
 
     function addCustomItem() {
       const input = document.getElementById('custom-input');
       const val = input.value.trim();
-      if(val) {
-        const key = sanitizeKey(val);
-        addActiveItem(key, { name: val, en: '', aisle: "5. 🥫 Pantry & Canned (Vorrat & Haltbares)", checked: false });
-        input.value = '';
-      }
+      if (!val) return;
+      const key = sanitizeKey(val);
+      ensureDraftResolved().then((listId) => {
+        db.ref(`lists/${listId}/items/${key}`).set({ name: val, en: '', aisle: "5. 🥫 Pantry & Canned (Vorrat & Haltbares)", checked: false });
+      });
+      input.value = '';
     }
 
-    function renderShoppingList() {
-      const container = document.getElementById('active-list-container');
-      container.innerHTML = '';
+    function renderCurrentListView() {
+      const container = document.getElementById('current-list-container');
+      const draft = (draftListId && lists[draftListId]) ? lists[draftListId] : null;
+      const titleInput = document.getElementById('current-list-title-input');
+      if (document.activeElement !== titleInput) {
+        titleInput.value = (draft && draft.title) || '';
+      }
+      const items = draft ? Object.entries(draft.items || {}) : [];
+      const mainBtn = document.getElementById('main-cta');
 
-      const itemsArr = Object.values(activeItems);
-      if(itemsArr.length === 0) {
-        container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">Your Grocefy list is empty!</p>`;
+      if (items.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">No items yet \u2014 add some from the Catalog.</p>`;
+        if (mainBtn) mainBtn.disabled = true;
         return;
       }
+      if (mainBtn) mainBtn.disabled = false;
 
-      itemsArr.sort((a, b) => a.aisle.localeCompare(b.aisle));
-
-      itemsArr.forEach(item => {
-        const div = document.createElement('div');
-        div.className = `check-item ${item.checked ? 'done' : ''}`;
-        div.innerHTML = `
-          <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleCheck('${item.name}')">
+      container.innerHTML = items.map(([key, item]) => `
+        <div class="check-item">
           <div style="flex:1;">
-            <div style="font-weight: 600;">${item.name} ${item.en ? `<span style="font-weight:normal; color:var(--subtext); font-size:0.85rem;">(${item.en})</span>` : ''}</div>
+            <div style="font-weight: 600;">${item.name}${item.en ? ` <span style="font-weight:normal; color:var(--subtext); font-size:0.85rem;">(${item.en})</span>` : ''}</div>
             <div style="font-size:0.75rem; color: var(--subtext);">${item.aisle}</div>
           </div>
-        `;
-        container.appendChild(div);
+          <button class="btn-add added" onclick="removeDraftItem('${key}')">✕ Remove</button>
+        </div>
+      `).join('');
+    }
+
+    function saveCurrentList() {
+      if (!draftListId) return;
+      const title = document.getElementById('current-list-title-input').value.trim() || null;
+      const draft = lists[draftListId];
+      if (!draft || !draft.items || Object.keys(draft.items).length === 0) return;
+
+      db.ref(`lists/${draftListId}`).update({ title: title, status: 'active' }).then(() => {
+        draftListId = null;
+        try { localStorage.removeItem('grocefyDraftListId'); } catch(e) {}
+        switchView('mylists');
       });
     }
 
-    function renderAll() {
-      const count = Object.keys(activeItems).length;
-      document.getElementById('cart-count').innerText = count;
-      document.getElementById('bar-count').innerText = `${count} ${count === 1 ? 'Item' : 'Items'} selected`;
-      renderCatalog();
-      renderShoppingList();
+    // A list is visible to you if you own it, or it's been shared with you.
+    function getVisibleLists(status) {
+      if (!currentUser) return [];
+      return Object.entries(lists)
+        .filter(([id, l]) => l.status === status &&
+          (l.ownerName === currentUser.name || (l.sharedWith || []).includes(currentUser.name)))
+        .map(([id, l]) => Object.assign({ id: id }, l));
     }
 
-    function finishShopping() {
-      if(Object.keys(activeItems).length === 0) return;
-      
-      const newEntry = {
-        date: new Date().toLocaleString(),
-        items: Object.values(activeItems).map(item => item.name)
-      };
+    // Default titles ("New List N") are numbered per-owner, across both
+    // active and completed lists, so a list keeps its number over time.
+    function getOwnerIndexMap() {
+      const byOwner = {};
+      Object.entries(lists).forEach(([id, l]) => {
+        if (l.status === 'draft') return;
+        if (!byOwner[l.ownerName]) byOwner[l.ownerName] = [];
+        byOwner[l.ownerName].push({ id: id, createdAt: l.createdAt });
+      });
+      Object.keys(byOwner).forEach(owner => byOwner[owner].sort((a, b) => a.createdAt - b.createdAt));
+      return byOwner;
+    }
 
-      if(db) {
-        db.ref('history').push(newEntry);
-        db.ref('activeList').remove();
-      } else {
-        activeItems = {};
-        renderAll();
+    function displayTitleFor(list, ownerIndexMap) {
+      if (list.title) return list.title;
+      const arr = ownerIndexMap[list.ownerName] || [];
+      const idx = arr.findIndex(x => x.id === list.id) + 1;
+      return `New List ${idx || 1}`;
+    }
+
+    function renderMyLists() {
+      const container = document.getElementById('mylists-container');
+      const ownerIndexMap = getOwnerIndexMap();
+      const activeLists = getVisibleLists('active').sort((a, b) => a.createdAt - b.createdAt);
+
+      document.getElementById('mylists-tab-count').innerText = activeLists.length;
+
+      if (activeLists.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">No saved lists yet.</p>`;
+        return;
       }
-      switchTab('history');
+
+      container.innerHTML = activeLists.map((l) => {
+        const displayTitle = displayTitleFor(l, ownerIndexMap);
+        const canDelete = l.ownerName === currentUser.name;
+        return `
+          <div class="list-card" onclick="openListForShopping('${l.id}')">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+              <div>
+                <div class="list-card-title">${displayTitle}</div>
+                <div class="list-card-meta">📅 ${new Date(l.createdAt).toLocaleString()} · by ${l.ownerName}</div>
+              </div>
+              ${canDelete ? `<button class="list-card-delete" onclick="event.stopPropagation(); deleteList('${l.id}')">✕</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function deleteList(id) {
+      if (!confirm('Delete this list? This cannot be undone.')) return;
+      db.ref('lists/' + id).remove();
+    }
+
+    function openListForShopping(id) {
+      openListId = id;
+      switchView('shoppingMode');
+    }
+
+    function renderShoppingMode() {
+      const list = lists[openListId];
+      if (!list) { switchView('mylists'); return; }
+
+      const ownerIndexMap = getOwnerIndexMap();
+      document.getElementById('shopping-mode-title').innerText = displayTitleFor(Object.assign({ id: openListId }, list), ownerIndexMap);
+
+      const container = document.getElementById('shopping-mode-container');
+      const itemsArr = Object.entries(list.items || {});
+      if (itemsArr.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">This list is empty.</p>`;
+        return;
+      }
+
+      itemsArr.sort((a, b) => a[1].aisle.localeCompare(b[1].aisle));
+
+      container.innerHTML = itemsArr.map(([key, item]) => `
+        <div class="check-item ${item.checked ? 'done' : ''}">
+          <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleShoppingCheck('${key}')">
+          <div style="flex:1;">
+            <div style="font-weight: 600;">${item.name}${item.en ? ` <span style="font-weight:normal; color:var(--subtext); font-size:0.85rem;">(${item.en})</span>` : ''}</div>
+            <div style="font-size:0.75rem; color: var(--subtext);">${item.aisle}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleShoppingCheck(key) {
+      if (!openListId || !lists[openListId] || !lists[openListId].items) return;
+      const item = lists[openListId].items[key];
+      if (!item) return;
+      db.ref(`lists/${openListId}/items/${key}/checked`).set(!item.checked);
+    }
+
+    function finalizeList() {
+      if (!openListId) return;
+      db.ref(`lists/${openListId}`).update({ status: 'completed', completedAt: Date.now() }).then(() => {
+        openListId = null;
+        switchView('history');
+      });
     }
 
     function renderHistory() {
       const container = document.getElementById('history-container');
-      container.innerHTML = '';
-      if(historyLogs.length === 0) {
+      const ownerIndexMap = getOwnerIndexMap();
+      const completedLists = getVisibleLists('completed').sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+
+      if (completedLists.length === 0) {
         container.innerHTML = `<p style="text-align:center; color: var(--subtext); margin-top: 40px; font-weight: 500;">No past shopping trips logged yet.</p>`;
-        return;
-      }
-      historyLogs.slice().reverse().forEach(log => {
-        const div = document.createElement('div');
-        div.className = 'history-card';
-        div.innerHTML = `
-          <div class="history-date">📅 ${log.date}</div>
-          <div style="font-size: 0.9rem; color: var(--text);">${log.items.join(', ')}</div>
-        `;
-        container.appendChild(div);
-      });
-    }
-
-    function switchTab(tab) {
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-      document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-      
-      const mainBtn = document.getElementById('main-cta');
-
-      if(tab === 'catalog') {
-        document.querySelectorAll('.tab-btn')[0].classList.add('active');
-        document.getElementById('catalog-view').classList.add('active');
-        mainBtn.innerText = "Go to Shopping List ➔";
-        mainBtn.onclick = () => switchTab('shopping');
-      } else if(tab === 'shopping') {
-        document.querySelectorAll('.tab-btn')[1].classList.add('active');
-        document.getElementById('shopping-view').classList.add('active');
-        mainBtn.innerText = "Finish List ✓";
-        mainBtn.onclick = finishShopping;
       } else {
-        document.querySelectorAll('.tab-btn')[2].classList.add('active');
-        document.getElementById('history-view').classList.add('active');
-        mainBtn.innerText = "+ New Shopping Trip";
-        mainBtn.onclick = () => switchTab('catalog');
+        container.innerHTML = completedLists.map(l => {
+          const title = displayTitleFor(l, ownerIndexMap);
+          const itemNames = Object.values(l.items || {}).map(i => i.name);
+          return `
+            <div class="history-card">
+              <div class="history-date">📅 ${new Date(l.completedAt || l.createdAt).toLocaleString()} \u2014 ${title}</div>
+              <div style="font-size: 0.9rem; color: var(--text);">${itemNames.join(', ')}</div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      if (currentUser && !document.getElementById('user-dropdown').classList.contains('hidden')) {
+        renderUserDropdown();
       }
     }
 
-    renderAll();
+    function updateBarLabel(view) {
+      const el = document.getElementById('bar-count');
+      if (view === 'catalog' || view === 'currentList') {
+        const draft = (draftListId && lists[draftListId]) ? lists[draftListId] : null;
+        const n = draft ? Object.keys(draft.items || {}).length : 0;
+        el.innerText = `${n} ${n === 1 ? 'Item' : 'Items'} in your list`;
+      } else if (view === 'mylists') {
+        const n = getVisibleLists('active').length;
+        el.innerText = `${n} active ${n === 1 ? 'list' : 'lists'}`;
+      } else if (view === 'shoppingMode') {
+        const list = lists[openListId];
+        const items = list ? Object.values(list.items || {}) : [];
+        const checkedCount = items.filter(i => i.checked).length;
+        el.innerText = `${checkedCount}/${items.length} checked`;
+      } else {
+        el.innerText = '';
+      }
+    }
+
+    function renderAll() {
+      if (currentViewName === 'catalog') renderCatalog();
+      else if (currentViewName === 'currentList') renderCurrentListView();
+      else if (currentViewName === 'mylists') renderMyLists();
+      else if (currentViewName === 'shoppingMode') renderShoppingMode();
+      else if (currentViewName === 'history') renderHistory();
+
+      document.getElementById('mylists-tab-count').innerText = getVisibleLists('active').length;
+      updateBarLabel(currentViewName);
+    }
+
+    function switchView(view) {
+      currentViewName = view;
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+      const tabIndexMap = { catalog: 0, currentList: 0, mylists: 1, shoppingMode: 1, history: 2 };
+      document.querySelectorAll('.tab-btn')[tabIndexMap[view]].classList.add('active');
+
+      const viewIdMap = {
+        catalog: 'catalog-view',
+        currentList: 'current-list-view',
+        mylists: 'mylists-view',
+        shoppingMode: 'shopping-mode-view',
+        history: 'history-view'
+      };
+      document.getElementById(viewIdMap[view]).classList.add('active');
+
+      const mainBtn = document.getElementById('main-cta');
+      mainBtn.disabled = false;
+      if (view === 'catalog') {
+        mainBtn.innerText = "Go to Shopping List ➔";
+        mainBtn.onclick = () => switchView('currentList');
+      } else if (view === 'currentList') {
+        mainBtn.innerText = "Save List ✓";
+        mainBtn.onclick = saveCurrentList;
+      } else if (view === 'mylists') {
+        mainBtn.innerText = "+ New List";
+        mainBtn.onclick = () => switchView('catalog');
+      } else if (view === 'shoppingMode') {
+        mainBtn.innerText = "Finalize List ✓";
+        mainBtn.onclick = finalizeList;
+      } else if (view === 'history') {
+        mainBtn.innerText = "+ New Shopping Trip";
+        mainBtn.onclick = () => switchView('catalog');
+      }
+
+      renderAll();
+    }
+
+    switchView('catalog');
   </script>
 </body>
 </html>
